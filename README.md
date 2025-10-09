@@ -1,30 +1,36 @@
-# Quotation System - HRG & WSG Products
+# Quotation System - Dynamic Product Management
 
-A PyQt5-based quotation management system for HRG and WSG products with Excel price list integration.
+A PyQt5-based quotation management system with dynamic product configuration using Excel Header sheet and SQLite database.
 
 ## Project Structure
 
 ```
-Komfortflow/
+QuoteFlow/
 ├── main.py                      # Entry point - run this!
 ├── quotation_ui.py              # UI components and main window
-├── price_loader.py              # Price list Excel parser
-├── price_list_modified.xlsx     # Price data (required)
+├── price_loader.py              # Price list loader from SQLite
+├── getsql.py                    # Excel to SQLite converter
+├── price_list_modified.xlsx     # Excel price data with Header sheet
+├── prices.db                    # SQLite database (auto-generated)
 ├── requirements.txt             # Python dependencies
-├── build_exe.py                 # Build script for .exe
-└── README.md                    # This file
+├── README.md                    # This file
+├── HEADER_SHEET_GUIDE.md        # Header sheet documentation
+├── CHANGES_SUMMARY.md           # Summary of changes
+└── test_header_integration.py   # Integration test suite
 ```
 
 ## Features
 
-- Load prices from Excel spreadsheet
-- Support for HRG and WSG products
+- **Dynamic Product Configuration** via Excel Header sheet
+- Load prices from SQLite database
+- Support for multiple product models (1-HRG, 2-WSG, etc.)
 - Multiple finishes (Anodized Aluminum, White Powder Coated)
 - Automatic size rounding to nearest available size
 - With Damper (WD) option support
 - Quote management (add, remove, clear items)
 - Save quotes to text files
 - Professional quotation formatting
+- Single or multiple models per price table
 
 ## Installation
 
@@ -35,7 +41,58 @@ Komfortflow/
    pip install -r requirements.txt
    ```
 
-3. **Ensure `price_list_modified.xlsx` is in the same folder**
+3. **Ensure Excel file with Header sheet is ready:**
+   - The Excel file must contain a **Header** sheet
+   - See `HEADER_SHEET_GUIDE.md` for details
+
+## Initial Setup
+
+Before running the application for the first time:
+
+1. **Add Header sheet to your Excel file** (see Header Sheet Format below)
+
+2. **Convert Excel to SQLite database:**
+   ```bash
+   python getsql.py
+   ```
+   This creates `prices.db` from your Excel file
+
+3. **Verify the conversion:**
+   ```bash
+   python test_header_integration.py
+   ```
+
+## Header Sheet Format
+
+The Excel file must include a **Header** sheet with these columns:
+
+| Table id | Sheet | Model |
+|----------|-------|-------|
+| 1 | 1-HRG,2-WSG TB | 1-HRG, 2-WSG |
+
+- **Table id**: Unique number for each price table
+- **Sheet**: Name of the Excel sheet containing prices
+- **Model**: Product model(s), comma-separated for multiple models
+
+**Example Configurations:**
+
+Single model:
+```
+Table id: 1
+Sheet: 1-HRG TB
+Model: 1-HRG
+```
+→ UI shows only "1-HRG"
+
+Multiple models:
+```
+Table id: 1
+Sheet: 1-HRG,2-WSG TB
+Model: 1-HRG, 2-WSG
+```
+→ UI shows both "1-HRG" and "2-WSG"
+
+See `HEADER_SHEET_GUIDE.md` for complete documentation.
 
 ## Running the Application
 
@@ -44,62 +101,116 @@ Komfortflow/
 python main.py
 ```
 
-### Build as Executable (.exe):
+### When to Regenerate Database:
 
-**Method 1: Using the build script (recommended)**
-```bash
-python build_exe.py
-```
-
-**Method 2: Manual PyInstaller command**
-```bash
-pyinstaller --onefile --windowed --name=QuotationSystem --add-data="price_list_modified.xlsx;." main.py
-```
-
-Note: On macOS/Linux, use `:` instead of `;` in the `--add-data` argument.
-
-The executable will be created in the `dist` folder.
+Run `python getsql.py` again when:
+- You add new products to the Header sheet
+- You modify price data in Excel
+- You add new price table sheets
 
 ## Usage
 
 1. **Launch the application**
 2. **Enter customer information** (name, quote number)
 3. **Select product configuration:**
-   - Product type (HRG or WSG)
-   - Finish
+   - Product type (dynamically loaded from database)
+   - Finish (Anodized Aluminum or White Powder Coated)
    - Width and height (in inches)
    - With Damper option
    - Quantity
 4. **Click "Add to Quote"** to add items
 5. **Save or print** your quote when ready
 
+## How It Works
+
+1. **Header Sheet** in Excel defines which products are available
+2. **getsql.py** reads the Header sheet and converts Excel to SQLite
+3. **Database** stores products and prices efficiently
+4. **UI** dynamically loads available products from the database
+5. **Price Loader** retrieves prices based on product and size selection
+
+## Workflow
+
+```
+Excel (with Header) → getsql.py → prices.db → UI
+```
+
+1. Update Header sheet in Excel
+2. Run `python getsql.py` to convert to database
+3. Run `python main.py` to launch UI
+4. UI shows products from database
+
 ## Notes
 
 - The system automatically rounds dimensions to the nearest available size
-- Prices are loaded from the Excel file at startup
-- The Excel file must be in the same directory as the application
-- When packaged as .exe, the Excel file is bundled automatically
+- Prices are loaded from SQLite database at startup
+- Products in the UI dropdown come from the Header sheet
+- Multiple models can share the same price table
+- Single model configuration: Only that model appears in UI
 
 ## Troubleshooting
 
-**Error: Price list file not found**
-- Ensure `price_list_modified.xlsx` is in the same directory as the application
+**Error: Price database not found**
+- Run: `python getsql.py` to create the database
 
-**Error: Failed to load price list**
-- Check that the Excel file is not corrupted
-- Verify the sheet names match: "1-HRG,2-WSG Alu" and "1-HRG,2-WSG Wh"
+**Error: No products found in database**
+- Check that Header sheet exists in Excel file
+- Verify Header sheet has data (not just column headers)
+- Re-run: `python getsql.py`
+
+**Error: Wrong products showing in UI**
+- Check the Model column in Header sheet
+- Ensure models are spelled correctly
+- For multiple models, separate with comma: "1-HRG, 2-WSG"
+- Re-run: `python getsql.py`
+
+**Error: Failed to load price database**
+- Delete `prices.db` and run `python getsql.py` again
+- Check that Excel file exists and is not corrupted
 
 **Module not found errors**
 - Run: `pip install -r requirements.txt`
+
+## Testing
+
+Run the integration test suite:
+```bash
+python test_header_integration.py
+```
+
+This verifies:
+- Header sheet reading
+- Database structure
+- Price loader functionality
+- UI integration
 
 ## Development
 
 The code is modularized for easy maintenance:
 
-- **price_loader.py**: All Excel parsing and price lookup logic
-- **quotation_ui.py**: All PyQt5 GUI components and user interactions
+- **getsql.py**: Excel to SQLite conversion, reads Header sheet
+- **price_loader.py**: Loads prices from SQLite database
+- **quotation_ui.py**: PyQt5 GUI components and user interactions
 - **main.py**: Simple entry point that launches the application
 
-To modify the UI, edit `quotation_ui.py`.
-To change price loading logic, edit `price_loader.py`.
+### To Add New Products:
+
+1. Edit the Header sheet in Excel
+2. Run `python getsql.py`
+3. Launch the UI - new products will appear
+
+### To Modify Price Loading:
+
+- Edit `price_loader.py` for price calculation logic
+- Edit `getsql.py` for database structure changes
+
+### To Modify UI:
+
+- Edit `quotation_ui.py` for interface changes
+
+## Additional Documentation
+
+- **HEADER_SHEET_GUIDE.md** - Complete guide to Header sheet format
+- **CHANGES_SUMMARY.md** - Summary of all changes made
+- **test_header_integration.py** - Test suite for verification
 

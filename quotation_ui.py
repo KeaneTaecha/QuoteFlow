@@ -88,7 +88,7 @@ class QuotationApp(QMainWindow):
         prod_layout = QVBoxLayout()
         prod_layout.addWidget(QLabel('Product Type:'))
         self.product_combo = QComboBox()
-        self.product_combo.addItems(['HRG', 'WSG'])
+        # Products will be loaded from the database
         self.product_combo.currentTextChanged.connect(self.on_product_changed)
         prod_layout.addWidget(self.product_combo)
         layout.addLayout(prod_layout)
@@ -102,9 +102,19 @@ class QuotationApp(QMainWindow):
         finish_layout.addWidget(self.finish_combo)
         layout.addLayout(finish_layout)
         
+        # Unit Selection
+        unit_layout = QVBoxLayout()
+        unit_layout.addWidget(QLabel('Unit:'))
+        self.unit_combo = QComboBox()
+        self.unit_combo.addItems(['Inches', 'Millimeters'])
+        self.unit_combo.currentTextChanged.connect(self.on_unit_changed)
+        unit_layout.addWidget(self.unit_combo)
+        layout.addLayout(unit_layout)
+        
         # Width
         width_layout = QVBoxLayout()
-        width_layout.addWidget(QLabel('Width (inches):'))
+        self.width_label = QLabel('Width (inches):')
+        width_layout.addWidget(self.width_label)
         self.width_spin = QSpinBox()
         self.width_spin.setMinimum(1)
         self.width_spin.setMaximum(100)
@@ -115,7 +125,8 @@ class QuotationApp(QMainWindow):
         
         # Height
         height_layout = QVBoxLayout()
-        height_layout.addWidget(QLabel('Height (inches):'))
+        self.height_label = QLabel('Height (inches):')
+        height_layout.addWidget(self.height_label)
         self.height_spin = QSpinBox()
         self.height_spin.setMinimum(1)
         self.height_spin.setMaximum(100)
@@ -248,7 +259,7 @@ class QuotationApp(QMainWindow):
         return widget
     
     def load_price_list(self):
-        """Load the Excel price list"""
+        """Load the SQLite price database"""
         # Handle both development and bundled executable paths
         if getattr(sys, 'frozen', False):
             # Running as compiled executable
@@ -257,20 +268,29 @@ class QuotationApp(QMainWindow):
             # Running as script
             application_path = os.path.dirname(os.path.abspath(__file__))
         
-        excel_file = os.path.join(application_path, 'price_list_modified.xlsx')
+        db_file = os.path.join(application_path, 'prices.db')
         
-        if not os.path.exists(excel_file):
+        if not os.path.exists(db_file):
             QMessageBox.critical(self, 'Error', 
-                               f'Price list file not found: {excel_file}\n\n'
-                               f'Please place the file in the same directory as this application.')
+                               f'Price database not found: {db_file}\n\n'
+                               f'Please run getsql.py first to create the database from the Excel file.')
             return
         
         try:
-            self.price_loader = PriceListLoader(excel_file)
+            self.price_loader = PriceListLoader(db_file)
+            
+            # Populate product combo with available models from database
+            available_models = self.price_loader.get_available_models()
+            if available_models:
+                self.product_combo.clear()
+                self.product_combo.addItems(available_models)
+            else:
+                QMessageBox.warning(self, 'Warning', 'No products found in the database!')
+            
             self.update_price_display()
-            self.statusBar().showMessage('Price list loaded successfully')
+            self.statusBar().showMessage(f'Price database loaded successfully ({len(available_models)} models found)')
         except Exception as e:
-            QMessageBox.critical(self, 'Error', f'Failed to load price list: {str(e)}')
+            QMessageBox.critical(self, 'Error', f'Failed to load price database: {str(e)}')
     
     def on_product_changed(self):
         """Handle product type change"""
@@ -278,6 +298,39 @@ class QuotationApp(QMainWindow):
     
     def on_selection_changed(self):
         """Handle selection changes"""
+        self.update_price_display()
+    
+    def on_unit_changed(self):
+        """Handle unit selection change"""
+        unit = self.unit_combo.currentText()
+        
+        if unit == 'Millimeters':
+            # Update labels
+            self.width_label.setText('Width (mm):')
+            self.height_label.setText('Height (mm):')
+            
+            # Update spin box ranges for mm (1-2500mm ≈ 1-100 inches)
+            self.width_spin.setMinimum(1)
+            self.width_spin.setMaximum(2500)
+            self.width_spin.setValue(100)  # 100mm ≈ 4 inches
+            
+            self.height_spin.setMinimum(1)
+            self.height_spin.setMaximum(2500)
+            self.height_spin.setValue(100)  # 100mm ≈ 4 inches
+        else:
+            # Update labels
+            self.width_label.setText('Width (inches):')
+            self.height_label.setText('Height (inches):')
+            
+            # Update spin box ranges for inches
+            self.width_spin.setMinimum(1)
+            self.width_spin.setMaximum(100)
+            self.width_spin.setValue(4)
+            
+            self.height_spin.setMinimum(1)
+            self.height_spin.setMaximum(100)
+            self.height_spin.setValue(4)
+        
         self.update_price_display()
     
     def update_price_display(self):
@@ -291,9 +344,18 @@ class QuotationApp(QMainWindow):
         height = self.height_spin.value()
         with_damper = self.damper_check.isChecked()
         quantity = self.quantity_spin.value()
+        unit = self.unit_combo.currentText()
+        
+        # Convert to inches if needed (mm to inches: divide by 25.4)
+        if unit == 'Millimeters':
+            width_inches = width / 25
+            height_inches = height / 25
+        else:
+            width_inches = width
+            height_inches = height
         
         # Find the rounded up size for pricing
-        rounded_size = self.price_loader.find_rounded_size(product, finish, width, height)
+        rounded_size = self.price_loader.find_rounded_size(product, finish, width_inches, height_inches)
         if not rounded_size:
             self.unit_price_label.setText('Size not available')
             self.total_price_label.setText('฿ 0.00')
@@ -318,9 +380,18 @@ class QuotationApp(QMainWindow):
         height = self.height_spin.value()
         with_damper = self.damper_check.isChecked()
         quantity = self.quantity_spin.value()
+        unit = self.unit_combo.currentText()
+        
+        # Convert to inches if needed (mm to inches: divide by 25.4)
+        if unit == 'Millimeters':
+            width_inches = width / 25.4
+            height_inches = height / 25.4
+        else:
+            width_inches = width
+            height_inches = height
         
         # Find the rounded up size for pricing
-        rounded_size = self.price_loader.find_rounded_size(product, finish, width, height)
+        rounded_size = self.price_loader.find_rounded_size(product, finish, width_inches, height_inches)
         if not rounded_size:
             QMessageBox.warning(self, 'Warning', 'Size not available in price list')
             return
@@ -335,12 +406,15 @@ class QuotationApp(QMainWindow):
         total_price = unit_price * quantity
         
         # Create product description
-        product_code = f"1-{product}"
+        product_code = product
         if with_damper:
             product_code += "(WD)"
         
-        # Store the original size entered by user, not the rounded size
-        original_size = f"{width}\" x {height}\""
+        # Store the original size entered by user with proper unit
+        if unit == 'Millimeters':
+            original_size = f"{width}mm x {height}mm"
+        else:
+            original_size = f"{width}\" x {height}\""
         
         item = {
             'product_code': product_code,
@@ -460,6 +534,6 @@ class QuotationApp(QMainWindow):
         
         if dialog.exec_() == QPrintDialog.Accepted:
             self.statusBar().showMessage('Printing...')
-            # Not Fin Yet :)
-            QMessageBox.information(self, 'Print', 'Print functionality would send the quote to the printer')
+            # TODO: Implement actual printing functionality
+            QMessageBox.information(self, 'Print', 'Print functionality not yet implemented')
 
