@@ -30,7 +30,7 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual environments s
+# Virtual environments
 venv/
 env/
 ENV/

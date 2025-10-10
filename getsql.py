@@ -48,9 +48,12 @@ class ExcelToSQLiteConverter:
         # Products table - now using table_id from Header sheet
         cursor.execute('''
             CREATE TABLE products (
-                table_id INTEGER PRIMARY KEY NOT NULL,
+                product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_id INTEGER NOT NULL,
                 model TEXT NOT NULL,
                 sheet_name TEXT NOT NULL,
+                anodized_multiplier REAL,
+                powder_coated_multiplier REAL,
                 UNIQUE(table_id, model)
             )
         ''')
@@ -166,6 +169,7 @@ class ExcelToSQLiteConverter:
         # Read header data (skip first row which contains column headers)
         for row in header_sheet.iter_rows(min_row=2, values_only=True):
             table_id, sheet_name, model = row[0], row[1], row[2]
+            anodized_multiplier, powder_coated_multiplier = row[3], row[4]
             
             # Skip empty rows
             if table_id is None or sheet_name is None or model is None:
@@ -174,31 +178,57 @@ class ExcelToSQLiteConverter:
             # Parse models (can be comma-separated)
             models = [m.strip() for m in str(model).split(',')]
             
+            # Parse multipliers (can be comma-separated to match models)
+            anodized_multipliers = []
+            if anodized_multiplier is not None:
+                anodized_multipliers = [float(m.strip()) for m in str(anodized_multiplier).split(',')]
+            
+            powder_coated_multipliers = []
+            if powder_coated_multiplier is not None:
+                powder_coated_multipliers = [float(m.strip()) for m in str(powder_coated_multiplier).split(',')]
+            
+            # If multipliers list has fewer items than models, repeat the last value
+            # If multipliers list has only one item, use it for all models
+            if len(anodized_multipliers) == 1:
+                anodized_multipliers = anodized_multipliers * len(models)
+            elif len(anodized_multipliers) > 0 and len(anodized_multipliers) < len(models):
+                anodized_multipliers.extend([anodized_multipliers[-1]] * (len(models) - len(anodized_multipliers)))
+            
+            if len(powder_coated_multipliers) == 1:
+                powder_coated_multipliers = powder_coated_multipliers * len(models)
+            elif len(powder_coated_multipliers) > 0 and len(powder_coated_multipliers) < len(models):
+                powder_coated_multipliers.extend([powder_coated_multipliers[-1]] * (len(models) - len(powder_coated_multipliers)))
+            
             self.header_data.append({
                 'table_id': int(table_id),
                 'sheet_name': str(sheet_name),
-                'models': models
+                'models': models,
+                'anodized_multipliers': anodized_multipliers,
+                'powder_coated_multipliers': powder_coated_multipliers
             })
         
         print(f"✓ Found {len(self.header_data)} table(s) in Header sheet\n")
         return True
     
-    def insert_products(self, table_id, sheet_name, models):
+    def insert_products(self, table_id, sheet_name, models, anodized_multipliers, powder_coated_multipliers):
         """Insert product records for a table"""
         cursor = self.conn.cursor()
         
-        for model in models:
+        for i, model in enumerate(models):
+            anodized_mult = anodized_multipliers[i] if i < len(anodized_multipliers) else None
+            powder_mult = powder_coated_multipliers[i] if i < len(powder_coated_multipliers) else None
+            
             cursor.execute('''
-                INSERT OR IGNORE INTO products (table_id, model, sheet_name)
-                VALUES (?, ?, ?)
-            ''', (table_id, model, sheet_name))
+                INSERT OR IGNORE INTO products (table_id, model, sheet_name, anodized_multiplier, powder_coated_multiplier)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (table_id, model, sheet_name, anodized_mult, powder_mult))
             self.stats['total_products'] += 1
     
-    def process_sheet(self, sheet, table_id, sheet_name, models):
+    def process_sheet(self, sheet, table_id, sheet_name, models, anodized_multipliers, powder_coated_multipliers):
         """Process a single Excel sheet"""
         try:
             # Insert products for this table
-            self.insert_products(table_id, sheet_name, models)
+            self.insert_products(table_id, sheet_name, models, anodized_multipliers, powder_coated_multipliers)
             
             # Process the price table
             price_count = self.process_table(sheet, table_id)
@@ -253,6 +283,8 @@ class ExcelToSQLiteConverter:
             table_id = header_entry['table_id']
             sheet_name = header_entry['sheet_name']
             models = header_entry['models']
+            anodized_multipliers = header_entry['anodized_multipliers']
+            powder_coated_multipliers = header_entry['powder_coated_multipliers']
             
             if sheet_name not in wb.sheetnames:
                 print(f"❌ Warning: Sheet '{sheet_name}' not found in Excel file!")
@@ -263,7 +295,7 @@ class ExcelToSQLiteConverter:
             
             try:
                 sheet = wb[sheet_name]
-                price_count = self.process_sheet(sheet, table_id, sheet_name, models)
+                price_count = self.process_sheet(sheet, table_id, sheet_name, models, anodized_multipliers, powder_coated_multipliers)
                 
                 if price_count > 0:
                     print(f"✓ {price_count} prices")

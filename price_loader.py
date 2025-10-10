@@ -14,10 +14,6 @@ class PriceListLoader:
     def __init__(self, db_path='prices.db'):
         self.db_path = db_path
         self.conn = None
-        self.finish_multipliers = {
-            'Anodized Aluminum': 1.25,
-            'White Powder Coated': 1.45
-        }
         self._check_database()
     
     def _check_database(self):
@@ -59,18 +55,24 @@ class PriceListLoader:
         width = int(float(size_match.group(1)))
         height = int(float(size_match.group(2)))
         
-        # Get price multiplier for finish
-        multiplier = self.finish_multipliers.get(finish, 1.0)
-        
         cursor = conn.cursor()
         
-        # First, get table_id for the product (this should be fast with model index)
-        cursor.execute('SELECT table_id FROM products WHERE model = ? LIMIT 1', (product,))
+        # Get table_id and multipliers for the product (this should be fast with model index)
+        cursor.execute('SELECT table_id, anodized_multiplier, powder_coated_multiplier FROM products WHERE model = ? LIMIT 1', (product,))
         table_result = cursor.fetchone()
         if not table_result:
             return 0
         
         table_id = table_result[0]
+        anodized_multiplier = table_result[1]
+        powder_coated_multiplier = table_result[2]
+        
+        # Get price multiplier for finish
+        multiplier = 1.0
+        if finish == 'Anodized Aluminum' and anodized_multiplier is not None:
+            multiplier = anodized_multiplier
+        elif finish == 'White Powder Coated' and powder_coated_multiplier is not None:
+            multiplier = powder_coated_multiplier
         
         # Query prices using the table_id and dimensions
         if with_damper:
