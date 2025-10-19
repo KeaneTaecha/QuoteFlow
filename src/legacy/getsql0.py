@@ -156,6 +156,13 @@ class ExcelToSQLiteConverter:
             if not self.is_inch_value(sheet.cell(row, height_col).value):
                 break
             end_row = row + 1  # Include the mm row after the inch row
+       
+        print(f"        Debug: Start_row: ({start_row})")
+        print(f"        Debug: Start_col: ({start_col})")
+        print(f"        Debug: End_row: ({end_row})")
+        print(f"        Debug: End_col: ({end_col})")
+        print(f"        Debug: Width_row: ({width_row})")
+        print(f"        Debug: Height_col: ({height_col})")
         
         return TableLocation(
             start_row=width_row,
@@ -476,8 +483,8 @@ class ExcelToSQLiteConverter:
 
 if __name__ == "__main__":
     # Configuration
-    EXCEL_FILE = 'price_list_modified.xlsx'  # Your Excel file name
-    DATABASE_FILE = 'prices.db'               # Output database name
+    EXCEL_FILE = '../data/price_list_modified.xlsx'  # Your Excel file name
+    DATABASE_FILE = '../prices.db'               # Output database name
     
     print("\n")
     print("╔════════════════════════════════════════════════════════════════════╗")

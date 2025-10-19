@@ -5,7 +5,7 @@ Simple entry point for the quotation application.
 
 import sys
 from PyQt5.QtWidgets import QApplication
-from quotation_ui import QuotationApp
+from ui.quotation_ui import QuotationApp
 
 
 def main():

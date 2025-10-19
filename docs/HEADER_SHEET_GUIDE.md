@@ -12,15 +12,18 @@ The Header sheet must contain the following columns:
 | **Table id** | Unique identifier for each price table | 1, 2, 3, etc. |
 | **Sheet** | Name of the Excel sheet containing the price table | "1-HRG,2-WSG TB" |
 | **Model** | Product model(s) for this table (comma-separated) | "1-HRG, 2-WSG" or "1-HRG" |
+| **Anodized Multiplier** | Price multiplier for Anodized Aluminum finish | 1.2, 1.3, etc. |
+| **Powder Coated Multiplier** | Price multiplier for White Powder Coated finish | 1.35, 1.4, etc. |
+| **Other Paint Multiplier** | Price multiplier for Other Paint finish | 1.1, 1.15, etc. |
 
 ### Example Header Sheet
 
 ```
-| Table id | Sheet           | Model          |
-|----------|-----------------|----------------|
-| 1        | 1-HRG,2-WSG TB  | 1-HRG, 2-WSG  |
-| 2        | 1-AL, 1-RAL Alu | 1-AL          |
-| 3        | 1-PFR TB        | 1-PFR         |
+| Table id | Sheet           | Model          | Anodized Multiplier | Powder Coated Multiplier | Other Paint Multiplier |
+|----------|-----------------|----------------|---------------------|-------------------------|------------------------|
+| 1        | 1-HRG,2-WSG TB  | 1-HRG, 2-WSG  | 1.2                 | 1.35                    | 1.1                    |
+| 2        | 1-AL, 1-RAL Alu | 1-AL          | 1.25                | 1.4                     | 1.15                   |
+| 3        | 1-PFR TB        | 1-PFR         | 1.3                 | 1.45                    | 1.2                    |
 ```
 
 ## How It Works
@@ -150,10 +153,11 @@ Result: Both "1-HRG" and "2-WSG" appear in the UI dropdown
 ## Price Multipliers
 
 The system applies finish multipliers to base prices:
-- **Anodized Aluminum**: 1.2x base price
-- **White Powder Coated**: 1.35x base price
+- **Anodized Aluminum**: Uses the Anodized Multiplier from Header sheet
+- **White Powder Coated**: Uses the Powder Coated Multiplier from Header sheet  
+- **Other Paint**: Uses the Other Paint Multiplier from Header sheet
 
-These multipliers are applied when loading prices from the database.
+These multipliers are applied when loading prices from the database. The multipliers are configured per product in the Header sheet.
 
 ## Troubleshooting
 

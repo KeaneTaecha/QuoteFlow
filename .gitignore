@@ -48,5 +48,6 @@ venv.bak/
 *.log
 
 # Data files
+data/
 *.xlsx
 *.db

@@ -41,6 +41,8 @@ class ExcelQuotationExporter:
             return 'สีอลูมิเนียม'
         elif 'White' in finish:
             return 'สีขาว'
+        elif 'Other Paint' in finish:
+            return 'สีอื่นๆ'
         else:
             return finish  # Return original if no match
     
@@ -54,7 +56,7 @@ class ExcelQuotationExporter:
             file_path: Path to save the Excel file
         """
         # Load the template file
-        template_path = 'quotation_template.xlsx'
+        template_path = '../data/quotation_template.xlsx'
         self.wb = openpyxl.load_workbook(template_path)
         self.ws = self.wb.active
         
@@ -134,6 +136,7 @@ class ExcelQuotationExporter:
             
                 # Parse size - G(Height) H(x) I(Width) J(Unit) - only for regular items
                 size = item.get('size', '')
+                
                 if 'mm' in size:
                     parts = size.replace('mm', '').split('x')
                     if len(parts) == 2:

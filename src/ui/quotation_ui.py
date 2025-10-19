@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont, QIcon, QColor
 
-from price_loader import PriceListLoader
+from database.price_loader import PriceListLoader
 from excel_exporter import ExcelQuotationExporter
 
 
@@ -202,7 +202,7 @@ class QuotationApp(QMainWindow):
         finish_layout = QVBoxLayout()
         finish_layout.addWidget(QLabel('Finish:'))
         self.finish_combo = QComboBox()
-        self.finish_combo.addItems(['Anodized Aluminum', 'White Powder Coated'])
+        # Finish options will be populated dynamically based on selected product
         self.finish_combo.currentTextChanged.connect(self.on_selection_changed)
         finish_layout.addWidget(self.finish_combo)
         layout.addLayout(finish_layout)
@@ -217,36 +217,52 @@ class QuotationApp(QMainWindow):
         layout.addLayout(unit_layout)
         
         # Width
-        width_layout = QVBoxLayout()
+        self.width_layout = QVBoxLayout()
         self.width_label = QLabel('Width (inches):')
-        width_layout.addWidget(self.width_label)
+        self.width_layout.addWidget(self.width_label)
         self.width_spin = QSpinBox()
         self.width_spin.setMinimum(1)
         self.width_spin.setMaximum(100)
         self.width_spin.setValue(4)
         self.width_spin.valueChanged.connect(self.update_price_display)
-        width_layout.addWidget(self.width_spin)
-        layout.addLayout(width_layout)
+        self.width_layout.addWidget(self.width_spin)
+        layout.addLayout(self.width_layout)
         
         # Height
-        height_layout = QVBoxLayout()
+        self.height_layout = QVBoxLayout()
         self.height_label = QLabel('Height (inches):')
-        height_layout.addWidget(self.height_label)
+        self.height_layout.addWidget(self.height_label)
         self.height_spin = QSpinBox()
         self.height_spin.setMinimum(1)
         self.height_spin.setMaximum(100)
         self.height_spin.setValue(4)
         self.height_spin.valueChanged.connect(self.update_price_display)
-        height_layout.addWidget(self.height_spin)
-        layout.addLayout(height_layout)
+        self.height_layout.addWidget(self.height_spin)
+        layout.addLayout(self.height_layout)
+        
+        # Other Table Size (initially hidden)
+        self.other_table_layout = QVBoxLayout()
+        self.other_table_label = QLabel('Size (inches):')
+        self.other_table_layout.addWidget(self.other_table_label)
+        self.other_table_spin = QSpinBox()
+        self.other_table_spin.setMinimum(1)
+        self.other_table_spin.setMaximum(100)
+        self.other_table_spin.setValue(4)
+        self.other_table_spin.valueChanged.connect(self.update_price_display)
+        self.other_table_layout.addWidget(self.other_table_spin)
+        layout.addLayout(self.other_table_layout)
+        
+        # Initially hide other table layout
+        self.other_table_layout.itemAt(0).widget().hide()
+        self.other_table_layout.itemAt(1).widget().hide()
         
         # With Damper
-        damper_layout = QVBoxLayout()
-        damper_layout.addWidget(QLabel('Options:'))
+        self.damper_layout = QVBoxLayout()
+        self.damper_layout.addWidget(QLabel('Options:'))
         self.damper_check = QCheckBox('With Damper (WD)')
         self.damper_check.stateChanged.connect(self.update_price_display)
-        damper_layout.addWidget(self.damper_check)
-        layout.addLayout(damper_layout)
+        self.damper_layout.addWidget(self.damper_check)
+        layout.addLayout(self.damper_layout)
         
         # Quantity
         qty_layout = QVBoxLayout()
@@ -277,8 +293,19 @@ class QuotationApp(QMainWindow):
         self.unit_price_label = QLabel('฿ 0.00')
         self.unit_price_label.setFont(QFont('Arial', 12, QFont.Bold))
         self.unit_price_label.setStyleSheet('color: #2E7D32; padding: 5px;')
+        self.unit_price_label.setMinimumWidth(120)  # Fixed width to prevent shifting
         price_layout.addWidget(self.unit_price_label)
         layout.addLayout(price_layout)
+        
+        # Rounded Size Display
+        rounded_size_layout = QVBoxLayout()
+        rounded_size_layout.addWidget(QLabel('Rounded Size:'))
+        self.rounded_size_label = QLabel('')
+        self.rounded_size_label.setFont(QFont('Arial', 12, QFont.Bold))
+        self.rounded_size_label.setStyleSheet('color: #FF5722; padding: 5px;')
+        self.rounded_size_label.setMinimumWidth(120)  # Fixed width to prevent shifting
+        rounded_size_layout.addWidget(self.rounded_size_label)
+        layout.addLayout(rounded_size_layout)
         
         # Total Price Display
         total_layout = QVBoxLayout()
@@ -286,6 +313,7 @@ class QuotationApp(QMainWindow):
         self.total_price_label = QLabel('฿ 0.00')
         self.total_price_label.setFont(QFont('Arial', 12, QFont.Bold))
         self.total_price_label.setStyleSheet('color: #1565C0; padding: 5px;')
+        self.total_price_label.setMinimumWidth(120)  # Fixed width to prevent shifting
         total_layout.addWidget(self.total_price_label)
         layout.addLayout(total_layout)
         
@@ -481,6 +509,8 @@ class QuotationApp(QMainWindow):
                 excel_item['finish'] = 'สีอลูมิเนียม'
             elif 'White' in item.get('finish', ''):
                 excel_item['finish'] = 'สีขาว'
+            elif 'Other Paint' in item.get('finish', ''):
+                excel_item['finish'] = 'สีอื่นๆ'
             items_for_excel.append(excel_item)
         
         # Get save file path
@@ -521,7 +551,7 @@ class QuotationApp(QMainWindow):
             # Running as script
             application_path = os.path.dirname(os.path.abspath(__file__))
         
-        db_file = os.path.join(application_path, 'prices.db')
+        db_file = os.path.join(application_path, '..', '..', 'prices.db')
         
         if not os.path.exists(db_file):
             QMessageBox.critical(self, 'Error', 
@@ -537,6 +567,8 @@ class QuotationApp(QMainWindow):
             if available_models:
                 self.product_combo.clear()
                 self.product_combo.addItems(available_models)
+                # Trigger finish options update for the first product
+                self.on_product_changed()
             else:
                 QMessageBox.warning(self, 'Warning', 'No products found in the database!')
             
@@ -547,10 +579,87 @@ class QuotationApp(QMainWindow):
     
     def on_product_changed(self):
         """Handle product type change"""
+        if not self.price_loader:
+            return
+        
+        # Get available finish options for the selected product
+        product = self.product_combo.currentText()
+        if product:
+            available_finishes = self.price_loader.get_available_finishes(product)
+            
+            # Update finish combo box with available options
+            self.finish_combo.clear()
+            if available_finishes:
+                self.finish_combo.addItems(available_finishes)
+                # Select the first available finish
+                self.finish_combo.setCurrentIndex(0)
+            else:
+                # No finishes available for this product
+                self.finish_combo.addItem('No finishes available')
+            
+            # Check if this product uses other table format instead of width/height
+            is_other_table = self.price_loader.is_other_table(product)
+            
+            if is_other_table:
+                # Hide width and height fields, show other table size field
+                self.width_layout.itemAt(0).widget().hide()  # width label
+                self.width_layout.itemAt(1).widget().hide()  # width spin
+                self.height_layout.itemAt(0).widget().hide()  # height label
+                self.height_layout.itemAt(1).widget().hide()  # height spin
+                self.other_table_layout.itemAt(0).widget().show()  # other table label
+                self.other_table_layout.itemAt(1).widget().show()  # other table spin
+            else:
+                # Show width and height fields, hide other table size field
+                self.width_layout.itemAt(0).widget().show()  # width label
+                self.width_layout.itemAt(1).widget().show()  # width spin
+                self.height_layout.itemAt(0).widget().show()  # height label
+                self.height_layout.itemAt(1).widget().show()  # height spin
+                self.other_table_layout.itemAt(0).widget().hide()  # other table label
+                self.other_table_layout.itemAt(1).widget().hide()  # other table spin
+            
+            # Check if damper option is available for this product
+            # Get the current finish selection
+            finish = self.finish_combo.currentText()
+            if finish and finish != 'No finishes available':
+                has_damper = self.price_loader.has_damper_option(product, finish)
+                if has_damper:
+                    # Show damper checkbox
+                    self.damper_layout.itemAt(0).widget().show()  # Options label
+                    self.damper_layout.itemAt(1).widget().show()  # damper checkbox
+                else:
+                    # Hide damper checkbox and uncheck it
+                    self.damper_check.setChecked(False)
+                    self.damper_layout.itemAt(0).widget().hide()  # Options label
+                    self.damper_layout.itemAt(1).widget().hide()  # damper checkbox
+            else:
+                # No valid finish selected, hide damper option
+                self.damper_check.setChecked(False)
+                self.damper_layout.itemAt(0).widget().hide()  # Options label
+                self.damper_layout.itemAt(1).widget().hide()  # damper checkbox
+        
         self.update_price_display()
     
     def on_selection_changed(self):
         """Handle selection changes"""
+        if not self.price_loader:
+            return
+        
+        product = self.product_combo.currentText()
+        finish = self.finish_combo.currentText()
+        
+        if product and finish:
+            # Check if damper option is available for this product/finish combination
+            has_damper = self.price_loader.has_damper_option(product, finish)
+            if has_damper:
+                # Show damper checkbox
+                self.damper_layout.itemAt(0).widget().show()  # Options label
+                self.damper_layout.itemAt(1).widget().show()  # damper checkbox
+            else:
+                # Hide damper checkbox and uncheck it
+                self.damper_check.setChecked(False)
+                self.damper_layout.itemAt(0).widget().hide()  # Options label
+                self.damper_layout.itemAt(1).widget().hide()  # damper checkbox
+        
         self.update_price_display()
     
     def on_unit_changed(self):
@@ -561,6 +670,7 @@ class QuotationApp(QMainWindow):
             # Update labels
             self.width_label.setText('Width (mm):')
             self.height_label.setText('Height (mm):')
+            self.other_table_label.setText('Size (mm):')
             
             # Update spin box ranges for mm
             self.width_spin.setMinimum(1)
@@ -570,10 +680,15 @@ class QuotationApp(QMainWindow):
             self.height_spin.setMinimum(1)
             self.height_spin.setMaximum(2500)
             self.height_spin.setValue(100)  # 100mm ≈ 4 inches
+            
+            self.other_table_spin.setMinimum(1)
+            self.other_table_spin.setMaximum(2500)
+            self.other_table_spin.setValue(100)  # 100mm ≈ 4 inches
         else:
             # Update labels
             self.width_label.setText('Width (inches):')
             self.height_label.setText('Height (inches):')
+            self.other_table_label.setText('Size (inches):')
             
             # Update spin box ranges for inches
             self.width_spin.setMinimum(1)
@@ -583,6 +698,10 @@ class QuotationApp(QMainWindow):
             self.height_spin.setMinimum(1)
             self.height_spin.setMaximum(100)
             self.height_spin.setValue(4)
+            
+            self.other_table_spin.setMinimum(1)
+            self.other_table_spin.setMaximum(100)
+            self.other_table_spin.setValue(4)
         
         self.update_price_display()
     
@@ -593,30 +712,70 @@ class QuotationApp(QMainWindow):
         
         product = self.product_combo.currentText()
         finish = self.finish_combo.currentText()
-        width = self.width_spin.value()
-        height = self.height_spin.value()
         with_damper = self.damper_check.isChecked()
         quantity = self.quantity_spin.value()
         discount = self.discount_spin.value()
         unit = self.unit_combo.currentText()
         
-        # Convert to inches if needed (mm to inches: divide by 25.4)
-        if unit == 'Millimeters':
-            width_inches = width / 25.4
-            height_inches = height / 25.4
+        # Check if this product uses other table format
+        is_other_table = self.price_loader.is_other_table(product)
+        
+        if is_other_table:
+            # Handle other table products
+            size = self.other_table_spin.value()
+            
+            # Convert to inches if needed (mm to inches: divide by 25.4)
+            if unit == 'Millimeters':
+                size_inches = size / 25.4
+            else:
+                size_inches = size
+            
+            # Find the rounded up size for pricing
+            rounded_size = self.price_loader.find_rounded_other_table_size(product, finish, size_inches)
+            if not rounded_size:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
+            
+            # Display the rounded size
+            self.rounded_size_label.setText(rounded_size)
+            
+            # Get price using the rounded size
+            unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper)
         else:
-            width_inches = width
-            height_inches = height
-        
-        # Find the rounded up size for pricing
-        rounded_size = self.price_loader.find_rounded_size(product, finish, width_inches, height_inches)
-        if not rounded_size:
-            self.unit_price_label.setText('Size not available')
-            self.total_price_label.setText('฿ 0.00')
-            return
-        
-        # Get price using the rounded size
-        unit_price = self.price_loader.get_price(product, finish, rounded_size, with_damper)
+            # Handle width/height-based products
+            width = self.width_spin.value()
+            height = self.height_spin.value()
+            
+            # Validate dimensions: width should not be greater than height
+            if width > height:
+                self.unit_price_label.setText('Invalid')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('Invalid')
+                return
+            
+            # Convert to inches if needed (mm to inches: divide by 25.4)
+            if unit == 'Millimeters':
+                width_inches = width / 25.4
+                height_inches = height / 25.4
+            else:
+                width_inches = width
+                height_inches = height
+            
+            # Find the rounded up size for pricing
+            rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
+            if not rounded_size:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
+            
+            # Display the rounded size
+            self.rounded_size_label.setText(rounded_size)
+            
+            # Get price using the rounded size
+            unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper)
         
         # Apply discount
         discount_amount = unit_price * (discount / 100)
@@ -638,66 +797,128 @@ class QuotationApp(QMainWindow):
         
         product = self.product_combo.currentText()
         finish = self.finish_combo.currentText()
-        width = self.width_spin.value()
-        height = self.height_spin.value()
         with_damper = self.damper_check.isChecked()
         quantity = self.quantity_spin.value()
         discount = self.discount_spin.value()
         unit = self.unit_combo.currentText()
         
-        # Convert to inches if needed
-        if unit == 'Millimeters':
-            width_inches = width / 25.4
-            height_inches = height / 25.4
+        # Check if this product uses other table format
+        is_other_table = self.price_loader.is_other_table(product)
+        
+        if is_other_table:
+            # Handle other table products
+            size = self.other_table_spin.value()
+            
+            # Convert to inches if needed
+            if unit == 'Millimeters':
+                size_inches = size / 25
+            else:
+                size_inches = size
+            
+            # Find the rounded up size for pricing
+            rounded_size = self.price_loader.find_rounded_other_table_size(product, finish, size_inches)
+            if not rounded_size:
+                QMessageBox.warning(self, 'Warning', 'Size not available in price list')
+                return
+            
+            # Get price using the rounded size
+            unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper)
+            
+            if unit_price == 0:
+                QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
+                return
+            
+            # Apply discount
+            discount_amount = unit_price * (discount / 100)
+            discounted_unit_price = unit_price - discount_amount
+            total_price = discounted_unit_price * quantity
+            
+            # Create product title
+            product_code = product
+            if with_damper:
+                product_code += "(WD)"
+            
+            # Store the original size entered by user with proper unit
+            if unit == 'Millimeters':
+                original_size = f"{size}mm"
+            else:
+                original_size = f'{size}"'
+            
+            item = {
+                'product_code': product_code,
+                'size': original_size,  # Original size entered by user
+                'finish': finish,
+                'quantity': quantity,
+                'unit_price': unit_price,  # Original unit price
+                'discount': discount / 100,  # Store as decimal (0.1 for 10%)
+                'discounted_unit_price': discounted_unit_price,  # Price after discount
+                'total': total_price,
+                'rounded_size': rounded_size  # Rounded size for pricing
+            }
         else:
-            width_inches = width
-            height_inches = height
-        
-        # Find the rounded up size for pricing
-        rounded_size = self.price_loader.find_rounded_size(product, finish, width_inches, height_inches)
-        if not rounded_size:
-            QMessageBox.warning(self, 'Warning', 'Size not available in price list')
-            return
-        
-        # Get price using the rounded size
-        unit_price = self.price_loader.get_price(product, finish, rounded_size, with_damper)
-        
-        if unit_price == 0:
-            QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
-            return
-        
-        # Apply discount
-        discount_amount = unit_price * (discount / 100)
-        discounted_unit_price = unit_price - discount_amount
-        total_price = discounted_unit_price * quantity
-        
-        # Create product title
-        product_code = product
-        if with_damper:
-            product_code += "(WD)"
-        
-        # Store the original size entered by user with proper unit
-        if unit == 'Millimeters':
-            original_size = f"{width}mm x {height}mm"
-        else:
-            original_size = f'{width}" x {height}"'
-        
-        item = {
-            'product_code': product_code,
-            'size': original_size,
-            'finish': finish,
-            'quantity': quantity,
-            'unit_price': unit_price,  # Original unit price
-            'discount': discount / 100,  # Store as decimal (0.1 for 10%)
-            'discounted_unit_price': discounted_unit_price,  # Price after discount
-            'total': total_price,
-            'rounded_size': rounded_size
-        }
+            # Handle width/height-based products
+            width = self.width_spin.value()
+            height = self.height_spin.value()
+            
+            # Validate dimensions: width should not be greater than height
+            if width > height:
+                QMessageBox.warning(self, 'Invalid Dimensions', 
+                                  'Width cannot be greater than height. Please adjust the dimensions.')
+                return
+            
+            # Convert to inches if needed
+            if unit == 'Millimeters':
+                width_inches = width / 25.4
+                height_inches = height / 25.4
+            else:
+                width_inches = width
+                height_inches = height
+            
+            # Find the rounded up size for pricing
+            rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
+            if not rounded_size:
+                QMessageBox.warning(self, 'Warning', 'Size not available in price list')
+                return
+
+            # Get price using the rounded size
+            unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper)
+            
+            if unit_price == 0:
+                QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
+                return
+            
+            # Apply discount
+            discount_amount = unit_price * (discount / 100)
+            discounted_unit_price = unit_price - discount_amount
+            total_price = discounted_unit_price * quantity
+            
+            # Create product title
+            product_code = product
+            if with_damper:
+                product_code += "(WD)"
+            
+            # Store the original size entered by user with proper unit
+            if unit == 'Millimeters':
+                original_size = f"{width}mm x {height}mm"
+            else:
+                original_size = f'{width}" x {height}"'
+            
+            item = {
+                'product_code': product_code,
+                'size': original_size,  # Original size entered by user
+                'finish': finish,
+                'quantity': quantity,
+                'unit_price': unit_price,  # Original unit price
+                'discount': discount / 100,  # Store as decimal (0.1 for 10%)
+                'discounted_unit_price': discounted_unit_price,  # Price after discount
+                'total': total_price,
+                'rounded_size': rounded_size  # Rounded size for pricing
+            }
         
         self.quote_items.append(item)
         self.refresh_items_table()
         
-        self.statusBar().showMessage(f'Added {product_code} {original_size} to quote')
+        self.statusBar().showMessage(f'Added {product_code} {item["size"]} to quote')
     
     def add_title_to_quote(self):
         """Add a title item to the quote"""
