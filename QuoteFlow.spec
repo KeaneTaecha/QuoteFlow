@@ -85,6 +85,6 @@ exe = EXE(
 app = BUNDLE(
     exe,
     name='QuoteFlow.app',
-    icon=None,
+    icon='assets/icon.icns',
     bundle_identifier=None,
 )

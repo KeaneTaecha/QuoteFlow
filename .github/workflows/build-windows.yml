@@ -112,6 +112,7 @@ jobs:
             target_arch=None,
             codesign_identity=None,
             entitlements_file=None,
+            icon='assets/icon.ico',
         )
         "@ | Out-File -FilePath "QuoteFlow-Windows.spec" -Encoding UTF8
 
