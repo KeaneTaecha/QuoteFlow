@@ -1,0 +1,272 @@
+name: Build All Platforms
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    # Allow manual triggering
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Create Windows .spec file
+      run: |
+        # Create a Windows-specific .spec file
+        @"
+        # -*- mode: python ; coding: utf-8 -*-
+
+        a = Analysis(
+            ['src/main.py'],
+            pathex=[],
+            binaries=[],
+            datas=[
+                ('src/ui', 'ui'),
+                ('src/database', 'database'),
+                ('src/excel_exporter.py', '.'),
+                ('data/quotation_template.xlsx', 'data'),
+                ('prices.db', '.')
+            ],
+            hiddenimports=[
+                'ui.quotation_ui',
+                'database.price_loader',
+                'database.getsql',
+                'database.handlers.default_handler',
+                'database.handlers.header_handler', 
+                'database.handlers.other_handler',
+                'excel_exporter',
+                'sqlite3',
+                'openpyxl'
+            ],
+            hookspath=[],
+            hooksconfig={},
+            runtime_hooks=[],
+            excludes=[
+                'matplotlib',
+                'numpy',
+                'scipy',
+                'pandas',
+                'tkinter',
+                'PIL',
+                'cv2',
+                'torch',
+                'torchvision',
+                'sklearn',
+                'skimage',
+                'tensorflow',
+                'keras',
+                'h5py',
+                'sympy',
+                'jinja2',
+                'pygments',
+                'imageio',
+                'psutil',
+                'setuptools',
+                'distutils',
+                'pkg_resources',
+                'packaging',
+                'certifi',
+                'charset_normalizer',
+                'requests',
+                'urllib3',
+                'werkzeug',
+                'cpuinfo',
+                'appdirs'
+            ],
+            noarchive=False,
+        )
+        pyz = PYZ(a.pure)
+
+        exe = EXE(
+            pyz,
+            a.scripts,
+            a.binaries,
+            a.datas,
+            [],
+            name='QuoteFlow',
+            debug=False,
+            bootloader_ignore_signals=False,
+            strip=False,
+            upx=True,
+            upx_exclude=[],
+            runtime_tmpdir=None,
+            console=False,
+            disable_windowed_traceback=False,
+            argv_emulation=False,
+            target_arch=None,
+            codesign_identity=None,
+            entitlements_file=None,
+        )
+        "@ | Out-File -FilePath "QuoteFlow-Windows.spec" -Encoding UTF8
+
+    - name: Build Windows executable
+      run: |
+        pyinstaller QuoteFlow-Windows.spec
+
+    - name: Upload Windows executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: QuoteFlow-Windows
+        path: dist/QuoteFlow.exe
+        retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build macOS application
+      run: |
+        pyinstaller QuoteFlow.spec
+
+    - name: Upload macOS application
+      uses: actions/upload-artifact@v4
+      with:
+        name: QuoteFlow-macOS
+        path: dist/QuoteFlow.app
+        retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Create Linux .spec file
+      run: |
+        # Create a Linux-specific .spec file
+        cat > QuoteFlow-Linux.spec << 'EOF'
+        # -*- mode: python ; coding: utf-8 -*-
+
+        a = Analysis(
+            ['src/main.py'],
+            pathex=[],
+            binaries=[],
+            datas=[
+                ('src/ui', 'ui'),
+                ('src/database', 'database'),
+                ('src/excel_exporter.py', '.'),
+                ('data/quotation_template.xlsx', 'data'),
+                ('prices.db', '.')
+            ],
+            hiddenimports=[
+                'ui.quotation_ui',
+                'database.price_loader',
+                'database.getsql',
+                'database.handlers.default_handler',
+                'database.handlers.header_handler', 
+                'database.handlers.other_handler',
+                'excel_exporter',
+                'sqlite3',
+                'openpyxl'
+            ],
+            hookspath=[],
+            hooksconfig={},
+            runtime_hooks=[],
+            excludes=[
+                'matplotlib',
+                'numpy',
+                'scipy',
+                'pandas',
+                'tkinter',
+                'PIL',
+                'cv2',
+                'torch',
+                'torchvision',
+                'sklearn',
+                'skimage',
+                'tensorflow',
+                'keras',
+                'h5py',
+                'sympy',
+                'jinja2',
+                'pygments',
+                'imageio',
+                'psutil',
+                'setuptools',
+                'distutils',
+                'pkg_resources',
+                'packaging',
+                'certifi',
+                'charset_normalizer',
+                'requests',
+                'urllib3',
+                'werkzeug',
+                'cpuinfo',
+                'appdirs'
+            ],
+            noarchive=False,
+        )
+        pyz = PYZ(a.pure)
+
+        exe = EXE(
+            pyz,
+            a.scripts,
+            a.binaries,
+            a.datas,
+            [],
+            name='QuoteFlow',
+            debug=False,
+            bootloader_ignore_signals=False,
+            strip=False,
+            upx=True,
+            upx_exclude=[],
+            runtime_tmpdir=None,
+            console=False,
+            disable_windowed_traceback=False,
+            argv_emulation=False,
+            target_arch=None,
+            codesign_identity=None,
+            entitlements_file=None,
+        )
+        EOF
+
+    - name: Build Linux executable
+      run: |
+        pyinstaller QuoteFlow-Linux.spec
+
+    - name: Upload Linux executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: QuoteFlow-Linux
+        path: dist/QuoteFlow
+        retention-days: 30

@@ -1,0 +1,48 @@
+name: Build macOS Application
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    # Allow manual triggering
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build macOS application
+      run: |
+        pyinstaller QuoteFlow.spec
+
+    - name: Upload macOS application
+      uses: actions/upload-artifact@v4
+      with:
+        name: QuoteFlow-macOS
+        path: dist/QuoteFlow.app
+        retention-days: 30
+
+    - name: Upload build logs
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: build-logs-macos
+        path: |
+          build/
+          *.log
+        retention-days: 7
