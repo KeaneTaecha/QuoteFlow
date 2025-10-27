@@ -33,8 +33,8 @@ jobs:
 
     - name: Verify icon files exist
       run: |
-        ls -la assets/
-        file assets/icon.ico
+        dir assets\
+        Get-ChildItem assets\icon.ico
 
     - name: Create optimized .spec file for Windows
       run: |
