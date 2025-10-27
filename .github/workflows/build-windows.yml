@@ -25,6 +25,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install Pillow  # Required for icon processing
+
+    - name: Verify icon files exist
+      run: |
+        ls -la assets/
+        file assets/icon.ico
 
     - name: Create optimized .spec file for Windows
       run: |
