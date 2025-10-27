@@ -32,12 +32,11 @@ jobs:
         dir assets\
         Get-ChildItem assets\icon.ico
 
-    - name: Generate multi-size ICO file
+    - name: Generate ICO file
       run: |
         python -c "
         from PIL import Image, ImageDraw
-        import struct
-        import io
+        import os
 
         def add_rounded_corners(image, radius=200):
             mask = Image.new('L', image.size, 0)
@@ -52,65 +51,19 @@ jobs:
         img = img.convert('RGBA')
         rounded_img = add_rounded_corners(img, radius=200)
 
-        # Create multiple sizes
-        sizes = [16, 32, 48, 64, 128, 256]
-        images = []
+        # Create a 256x256 ICO file (most important size for Windows)
+        resized = rounded_img.resize((256, 256), Image.LANCZOS)
+        resized.save('assets/icon.ico', format='ICO')
 
-        # Create ICO file manually
-        ico_data = bytearray()
+        print(f'Generated ICO file')
+        print(f'File size: {os.path.getsize(\"assets/icon.ico\")} bytes')
 
-        # ICO header: 6 bytes
-        ico_data.extend(struct.pack('<HHH', 0, 1, len(sizes)))  # reserved, type, count
-
-        # Calculate offsets for image data
-        image_data_offset = 6 + (len(sizes) * 16)  # header + directory entries
-        image_data = bytearray()
-
-        # Create directory entries and image data
-        for i, size in enumerate(sizes):
-            resized = rounded_img.resize((size, size), Image.LANCZOS)
-            
-            # Convert to BMP format for ICO
-            bmp_data = io.BytesIO()
-            resized.save(bmp_data, format='BMP')
-            bmp_bytes = bmp_data.getvalue()
-            
-            # ICO directory entry: 16 bytes
-            width = size if size < 256 else 0
-            height = size if size < 256 else 0
-            colors = 0  # 0 means no palette
-            reserved = 0
-            planes = 1
-            bpp = 32
-            size_bytes = len(bmp_bytes)
-            offset = image_data_offset + len(image_data)
-            
-            ico_data.extend(struct.pack('<BBBBHHII', width, height, colors, reserved, planes, bpp, size_bytes, offset))
-            image_data.extend(bmp_bytes)
-
-        # Combine header, directory, and image data
-        ico_data.extend(image_data)
-
-        # Write to file
-        with open('assets/icon.ico', 'wb') as f:
-            f.write(ico_data)
-
-        print(f'Generated multi-size ICO file with {len(sizes)} sizes: {sizes}')
-        print(f'Total ICO file size: {len(ico_data)} bytes')
-        "
-
-    - name: Verify multi-size ICO file
-      run: |
-        python -c "
-        import struct
-        with open('assets/icon.ico', 'rb') as f:
-            data = f.read()
-        reserved, type_id, count = struct.unpack('<HHH', data[:6])
-        print(f'ICO file contains {count} icon sizes')
-        for i in range(count):
-            offset = 6 + i * 16
-            width, height, colors, reserved, planes, bpp, size, offset_img = struct.unpack('<BBBBHHII', data[offset:offset+16])
-            print(f'  Size {i+1}: {width}x{height}, {bpp}bpp')
+        # Test if it works
+        try:
+            test_img = Image.open('assets/icon.ico')
+            print(f'ICO test: {test_img.size}, {test_img.mode} - SUCCESS!')
+        except Exception as e:
+            print(f'ICO test failed: {e}')
         "
 
     - name: Build Windows executable (OneDir)
