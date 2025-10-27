@@ -47,7 +47,8 @@ venv.bak/
 # Logs
 *.log
 
-# Data files
-data/
-*.xlsx
+# Data files (but allow specific ones needed for build)
+data/*.xlsx
+!data/quotation_template.xlsx
 *.db
+!prices.db
