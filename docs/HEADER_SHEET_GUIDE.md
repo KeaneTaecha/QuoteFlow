@@ -12,18 +12,19 @@ The Header sheet must contain the following columns:
 | **Table id** | Unique identifier for each price table | 1, 2, 3, etc. |
 | **Sheet** | Name of the Excel sheet containing the price table | "1-HRG,2-WSG TB" |
 | **Model** | Product model(s) for this table (comma-separated) | "1-HRG, 2-WSG" or "1-HRG" |
+| **TB Modifier** | Equation or multiplier to calculate base price (BP) from table price | "TB*1.2", "TB+50", "1.5" |
 | **Anodized Multiplier** | Price multiplier for Anodized Aluminum finish | 1.2, 1.3, etc. |
 | **Powder Coated Multiplier** | Price multiplier for White Powder Coated finish | 1.35, 1.4, etc. |
-| **Other Paint Multiplier** | Price multiplier for Other Paint finish | 1.1, 1.15, etc. |
+| **WD** | With Damper equation or multiplier (can reference BP) | "BP*1.1", "TB+BP*0.5", "1.2" |
 
 ### Example Header Sheet
 
 ```
-| Table id | Sheet           | Model          | Anodized Multiplier | Powder Coated Multiplier | Other Paint Multiplier |
-|----------|-----------------|----------------|---------------------|-------------------------|------------------------|
-| 1        | 1-HRG,2-WSG TB  | 1-HRG, 2-WSG  | 1.2                 | 1.35                    | 1.1                    |
-| 2        | 1-AL, 1-RAL Alu | 1-AL          | 1.25                | 1.4                     | 1.15                   |
-| 3        | 1-PFR TB        | 1-PFR         | 1.3                 | 1.45                    | 1.2                    |
+| Table id | Sheet           | Model          | TB Modifier | Anodized Multiplier | Powder Coated Multiplier | WD |
+|----------|-----------------|----------------|-------------|---------------------|-------------------------|-----|
+| 1        | 1-HRG,2-WSG TB  | 1-HRG, 2-WSG  | TB*1.1      | 1.2                 | 1.35                    | BP*1.05 |
+| 2        | 1-AL, 1-RAL Alu | 1-AL          | 1.15        | 1.25                | 1.4                     | 1.1 |
+| 3        | 1-PFR TB        | 1-PFR         | TB+25       | 1.3                 | 1.45                    | BP*1.08 |
 ```
 
 ## How It Works
@@ -150,14 +151,46 @@ Model: 1-HRG, 2-WSG
 ```
 Result: Both "1-HRG" and "2-WSG" appear in the UI dropdown
 
-## Price Multipliers
+## Price Calculation Flow
 
-The system applies finish multipliers to base prices:
+### 1. **TB Modifier (Base Price Calculation)**
+The TB Modifier is applied first to calculate the base price (BP) from the table price (TB):
+- **TB Modifier**: Can be a simple multiplier (e.g., "1.2") or an equation (e.g., "TB*1.1", "TB+50")
+- **Result**: Creates the Base Price (BP) which can be referenced in other equations
+- **Variables Available**: TB (table price), WD (with damper price), WIDTH, HEIGHT
+
+### 2. **WD (With Damper) Calculation**
+The WD column can reference the calculated BP and creates MWD (Modified WD):
+- **WD Equation**: Can use BP, TB, WD, WIDTH, HEIGHT variables
+- **Examples**: "BP*1.05", "TB+BP*0.5", "1.1"
+- **Result**: Creates MWD (Modified WD) price used for with-damper calculations
+
+### 3. **Finish Multipliers**
+The system applies finish multipliers to the calculated prices:
 - **Anodized Aluminum**: Uses the Anodized Multiplier from Header sheet
 - **White Powder Coated**: Uses the Powder Coated Multiplier from Header sheet  
 - **Other Paint**: Uses the Other Paint Multiplier from Header sheet
 
 These multipliers are applied when loading prices from the database. The multipliers are configured per product in the Header sheet.
+
+## Available Variables in Equations
+
+When writing equations for TB Modifier or WD columns, you can use these variables:
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| **TB** | Original table price (unchanged) | 100 |
+| **WD** | Original with-damper price (unchanged) | 120 |
+| **BP** | Base price calculated from TB modifier | 110 (if TB modifier = "TB*1.1") |
+| **MWD** | Modified WD price calculated from WD equation | 130 (if WD = "BP*1.18") |
+| **WIDTH** | Product width in inches | 24 |
+| **HEIGHT** | Product height in inches | 36 |
+
+### Example Calculation Flow:
+1. TB = 100 (original table price)
+2. TB Modifier = "TB*1.1" → BP = 110
+3. WD Equation = "BP*1.18" → MWD = 129.8
+4. Finish Multiplier = 1.5 → Final Price = 194.7 (when with_damper=True)
 
 ## Troubleshooting
 

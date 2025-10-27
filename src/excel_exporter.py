@@ -18,31 +18,90 @@ class ExcelQuotationExporter:
         
     def thai_baht_text(self, amount):
         """Convert amount to Thai baht text"""
-        # This is a simplified version - you may want to use a proper Thai number library
-        # For now, we'll use a basic conversion
         baht = int(amount)
-        satang = int((amount - baht) * 100)
+        satang = int(round((amount - baht) * 100))
         
-        # Thai number words (simplified - you may want to use pythainlp library)
-        thai_numbers = {
-            0: 'ศูนย์', 1: 'หนึ่ง', 2: 'สอง', 3: 'สาม', 4: 'สี่',
-            5: 'ห้า', 6: 'หก', 7: 'เจ็ด', 8: 'แปด', 9: 'เก้า',
-            10: 'สิบ', 20: 'ยี่สิบ', 100: 'ร้อย', 1000: 'พัน',
-            10000: 'หมื่น', 100000: 'แสน', 1000000: 'ล้าน'
-        }
+        # Convert baht to Thai text
+        baht_text = self._number_to_thai_text(baht)
         
-        # For demonstration, return a placeholder
-        # In production, use pythainlp or similar library
-        return f"จำนวนเงิน {baht:,} บาท {satang:02d} สตางค์"
+        # Convert satang to Thai text
+        satang_text = self._number_to_thai_text(satang)
+        
+        # Format the result
+        if baht == 0 and satang == 0:
+            return "จำนวนเงิน ศูนย์บาท ศูนย์สตางค์"
+        elif baht == 0:
+            return f"จำนวนเงิน ศูนย์บาท {satang_text}สตางค์"
+        elif satang == 0:
+            return f"จำนวนเงิน {baht_text}บาท"
+        else:
+            return f"จำนวนเงิน {baht_text}บาท {satang_text}สตางค์"
+    
+    def _number_to_thai_text(self, number):
+        """Convert number to Thai text"""
+        if number == 0:
+            return "ศูนย์"
+        
+        # Thai number words
+        thai_digits = ['', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า']
+        thai_units = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน']
+        
+        # Special cases for 10-19
+        if 10 <= number <= 19:
+            if number == 10:
+                return "สิบ"
+            elif number == 11:
+                return "สิบเอ็ด"
+            else:
+                return "สิบ" + thai_digits[number % 10]
+        
+        # Handle larger numbers
+        result = ""
+        position = 0
+        
+        while number > 0:
+            digit = number % 10
+            
+            if digit != 0:
+                if position == 0:  # Units place
+                    if digit == 1 and number > 10:  # Special case: เอ็ด for 1 in units when > 10
+                        result = "เอ็ด" + result
+                    else:
+                        result = thai_digits[digit] + result
+                elif position == 1:  # Tens place
+                    if digit == 1:
+                        result = "สิบ" + result
+                    elif digit == 2:
+                        result = "ยี่สิบ" + result
+                    else:
+                        result = thai_digits[digit] + "สิบ" + result
+                else:  # Hundreds, thousands, etc.
+                    if position < len(thai_units):
+                        result = thai_digits[digit] + thai_units[position] + result
+            
+            number //= 10
+            position += 1
+        
+        return result
     
     def get_thai_finishing(self, finish):
         """Convert English finishing name to Thai"""
         if 'Anodized' in finish:
             return 'สีอลูมิเนียม'
-        elif 'White' in finish:
-            return 'สีขาว'
-        elif 'Other Paint' in finish:
-            return 'สีอื่นๆ'
+        elif 'Powder Coated' in finish:
+            # Extract the color from "Powder Coated - Color" format
+            if ' - ' in finish:
+                color = finish.split(' - ', 1)[1]
+                return f'สี{color}'
+            else:
+                return 'สีขาวนวล'  # Default powder coating color
+        elif 'Special Color' in finish:
+            # Extract the multiplier from "Special Color - X.X" format
+            if ' - ' in finish:
+                multiplier = finish.split(' - ', 1)[1]
+                return f'สีพิเศษ (x{multiplier})'
+            else:
+                return 'สีพิเศษ'  # Default special color
         else:
             return finish  # Return original if no match
     
@@ -56,7 +115,17 @@ class ExcelQuotationExporter:
             file_path: Path to save the Excel file
         """
         # Load the template file
-        template_path = '../data/quotation_template.xlsx'
+        import sys
+        import os
+        
+        if getattr(sys, 'frozen', False):
+            # Running as compiled executable - template is in data folder
+            application_path = sys._MEIPASS
+            template_path = os.path.join(application_path, 'data', 'quotation_template.xlsx')
+        else:
+            # Running as script
+            template_path = '../data/quotation_template.xlsx'
+        
         self.wb = openpyxl.load_workbook(template_path)
         self.ws = self.wb.active
         

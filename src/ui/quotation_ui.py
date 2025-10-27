@@ -10,9 +10,9 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QComboBox, QSpinBox, QPushButton,
                              QTableWidget, QTableWidgetItem, QGroupBox, QCheckBox,
                              QLineEdit, QMessageBox, QFileDialog, QHeaderView,
-                             QGridLayout, QTextEdit, QDateEdit, QTabWidget)
+                             QGridLayout, QTextEdit, QDateEdit, QTabWidget, QListWidget)
 from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui import QFont, QIcon, QColor
+from PyQt5.QtGui import QFont, QColor
 
 from database.price_loader import PriceListLoader
 from excel_exporter import ExcelQuotationExporter
@@ -74,6 +74,11 @@ class QuotationApp(QMainWindow):
         
         # Action buttons at the bottom
         main_layout.addWidget(self.create_action_buttons())
+        
+        # Set up product dropdown for floating positioning
+        self.product_dropdown.setParent(main_widget)
+        self.product_dropdown.setWindowFlags(Qt.Widget)
+        self.product_dropdown.setAttribute(Qt.WA_ShowWithoutActivating)
         
         self.statusBar().showMessage('Ready')
     
@@ -193,9 +198,39 @@ class QuotationApp(QMainWindow):
         # Product Type
         prod_layout = QVBoxLayout()
         prod_layout.addWidget(QLabel('Product Type:'))
-        self.product_combo = QComboBox()
-        self.product_combo.currentTextChanged.connect(self.on_product_changed)
-        prod_layout.addWidget(self.product_combo)
+        self.product_input = QLineEdit()
+        self.product_input.setPlaceholderText('Type to search product models...')
+        self.product_input.textChanged.connect(self.on_product_text_changed)
+        self.product_input.returnPressed.connect(self.on_product_selected)
+        self.product_input.focusOutEvent = self.on_product_input_focus_out
+        self.product_input.keyPressEvent = self.on_product_input_key_press
+        prod_layout.addWidget(self.product_input)
+        
+        # Dropdown list for matching products - positioned absolutely to float over content
+        self.product_dropdown = QListWidget()
+        self.product_dropdown.setMaximumHeight(150)
+        self.product_dropdown.setVisible(False)
+        self.product_dropdown.itemClicked.connect(self.on_dropdown_item_selected)
+        self.product_dropdown.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #ccc;
+                background-color: palette(base);
+                color: palette(text);
+                selection-background-color: #0078d4;
+            }
+            QListWidget::item {
+                padding: 5px;
+                border-bottom: 1px solid palette(mid);
+                color: palette(text);
+            }
+            QListWidget::item:hover {
+                background-color: palette(highlight);
+            }
+            QListWidget::item:selected {
+                background-color: #0078d4;
+                color: white;
+            }
+        """)
         layout.addLayout(prod_layout)
         
         # Finish
@@ -206,6 +241,40 @@ class QuotationApp(QMainWindow):
         self.finish_combo.currentTextChanged.connect(self.on_selection_changed)
         finish_layout.addWidget(self.finish_combo)
         layout.addLayout(finish_layout)
+        
+        # Powder Coating Color (initially hidden)
+        self.powder_color_layout = QVBoxLayout()
+        self.powder_color_label = QLabel('Powder Coating Color:')
+        self.powder_color_layout.addWidget(self.powder_color_label)
+        self.powder_color_combo = QComboBox()
+        self.powder_color_combo.addItems([
+            'ขาวนวล',
+            'ขาวเงา',
+            'ขาวด้าน',
+            'ขาวบริสุทธิ์',
+            'ดำเงา',
+            'ดำด้าน',
+            'บรอนส์'
+        ])
+        self.powder_color_combo.currentTextChanged.connect(self.on_selection_changed)
+        self.powder_color_layout.addWidget(self.powder_color_combo)
+        layout.addLayout(self.powder_color_layout)
+        
+        # Initially hide powder color selection
+        self.show_hide_widgets(self.powder_color_layout, False)
+        
+        # Special Color Name (initially hidden)
+        self.special_color_layout = QVBoxLayout()
+        self.special_color_label = QLabel('Special Color Name:')
+        self.special_color_layout.addWidget(self.special_color_label)
+        self.special_color_input = QLineEdit()
+        self.special_color_input.setPlaceholderText('e.g., Custom Blue, RAL 5005, etc.')
+        self.special_color_input.textChanged.connect(self.on_selection_changed)
+        self.special_color_layout.addWidget(self.special_color_input)
+        layout.addLayout(self.special_color_layout)
+        
+        # Initially hide special color input
+        self.show_hide_widgets(self.special_color_layout, False)
         
         # Unit Selection
         unit_layout = QVBoxLayout()
@@ -222,7 +291,7 @@ class QuotationApp(QMainWindow):
         self.width_layout.addWidget(self.width_label)
         self.width_spin = QSpinBox()
         self.width_spin.setMinimum(1)
-        self.width_spin.setMaximum(100)
+        self.width_spin.setMaximum(9999)
         self.width_spin.setValue(4)
         self.width_spin.valueChanged.connect(self.update_price_display)
         self.width_layout.addWidget(self.width_spin)
@@ -234,7 +303,7 @@ class QuotationApp(QMainWindow):
         self.height_layout.addWidget(self.height_label)
         self.height_spin = QSpinBox()
         self.height_spin.setMinimum(1)
-        self.height_spin.setMaximum(100)
+        self.height_spin.setMaximum(9999)
         self.height_spin.setValue(4)
         self.height_spin.valueChanged.connect(self.update_price_display)
         self.height_layout.addWidget(self.height_spin)
@@ -246,15 +315,14 @@ class QuotationApp(QMainWindow):
         self.other_table_layout.addWidget(self.other_table_label)
         self.other_table_spin = QSpinBox()
         self.other_table_spin.setMinimum(1)
-        self.other_table_spin.setMaximum(100)
+        self.other_table_spin.setMaximum(9999)
         self.other_table_spin.setValue(4)
         self.other_table_spin.valueChanged.connect(self.update_price_display)
         self.other_table_layout.addWidget(self.other_table_spin)
         layout.addLayout(self.other_table_layout)
         
         # Initially hide other table layout
-        self.other_table_layout.itemAt(0).widget().hide()
-        self.other_table_layout.itemAt(1).widget().hide()
+        self.show_hide_widgets(self.other_table_layout, False)
         
         # With Damper
         self.damper_layout = QVBoxLayout()
@@ -327,6 +395,10 @@ class QuotationApp(QMainWindow):
         layout.addLayout(add_layout)
         
         group.setLayout(layout)
+        
+        # Store reference to product input for dropdown positioning
+        self.product_input_widget = self.product_input
+        
         return group
     
     def create_title_section(self):
@@ -504,13 +576,8 @@ class QuotationApp(QMainWindow):
         items_for_excel = []
         for item in self.quote_items:
             excel_item = item.copy()
-            # Convert finish to Thai
-            if 'Anodized' in item.get('finish', ''):
-                excel_item['finish'] = 'สีอลูมิเนียม'
-            elif 'White' in item.get('finish', ''):
-                excel_item['finish'] = 'สีขาว'
-            elif 'Other Paint' in item.get('finish', ''):
-                excel_item['finish'] = 'สีอื่นๆ'
+            # Convert finish to Thai using the exporter's method
+            excel_item['finish'] = self.excel_exporter.get_thai_finishing(item.get('finish', ''))
             items_for_excel.append(excel_item)
         
         # Get save file path
@@ -545,13 +612,13 @@ class QuotationApp(QMainWindow):
         """Load the SQLite price database"""
         # Handle both development and bundled executable paths
         if getattr(sys, 'frozen', False):
-            # Running as compiled executable
+            # Running as compiled executable - database is in the root of extracted files
             application_path = sys._MEIPASS
+            db_file = os.path.join(application_path, 'prices.db')
         else:
             # Running as script
             application_path = os.path.dirname(os.path.abspath(__file__))
-        
-        db_file = os.path.join(application_path, '..', '..', 'prices.db')
+            db_file = os.path.join(application_path, '..', '..', 'prices.db')
         
         if not os.path.exists(db_file):
             QMessageBox.critical(self, 'Error', 
@@ -562,18 +629,14 @@ class QuotationApp(QMainWindow):
         try:
             self.price_loader = PriceListLoader(db_file)
             
-            # Populate product combo with available models from database
-            available_models = self.price_loader.get_available_models()
-            if available_models:
-                self.product_combo.clear()
-                self.product_combo.addItems(available_models)
-                # Trigger finish options update for the first product
-                self.on_product_changed()
+            # Store available models for searching
+            self.available_models = self.price_loader.get_available_models()
+            if self.available_models:
+                self.statusBar().showMessage(f'Price database loaded successfully ({len(self.available_models)} models found)')
             else:
                 QMessageBox.warning(self, 'Warning', 'No products found in the database!')
             
             self.update_price_display()
-            self.statusBar().showMessage(f'Price database loaded successfully ({len(available_models)} models found)')
         except Exception as e:
             QMessageBox.critical(self, 'Error', f'Failed to load price database: {str(e)}')
     
@@ -583,7 +646,7 @@ class QuotationApp(QMainWindow):
             return
         
         # Get available finish options for the selected product
-        product = self.product_combo.currentText()
+        product = self.product_input.text().strip()
         if product:
             available_finishes = self.price_loader.get_available_finishes(product)
             
@@ -602,63 +665,174 @@ class QuotationApp(QMainWindow):
             
             if is_other_table:
                 # Hide width and height fields, show other table size field
-                self.width_layout.itemAt(0).widget().hide()  # width label
-                self.width_layout.itemAt(1).widget().hide()  # width spin
-                self.height_layout.itemAt(0).widget().hide()  # height label
-                self.height_layout.itemAt(1).widget().hide()  # height spin
-                self.other_table_layout.itemAt(0).widget().show()  # other table label
-                self.other_table_layout.itemAt(1).widget().show()  # other table spin
+                self.show_hide_widgets(self.width_layout, False)
+                self.show_hide_widgets(self.height_layout, False)
+                self.show_hide_widgets(self.other_table_layout, True)
             else:
                 # Show width and height fields, hide other table size field
-                self.width_layout.itemAt(0).widget().show()  # width label
-                self.width_layout.itemAt(1).widget().show()  # width spin
-                self.height_layout.itemAt(0).widget().show()  # height label
-                self.height_layout.itemAt(1).widget().show()  # height spin
-                self.other_table_layout.itemAt(0).widget().hide()  # other table label
-                self.other_table_layout.itemAt(1).widget().hide()  # other table spin
+                self.show_hide_widgets(self.width_layout, True)
+                self.show_hide_widgets(self.height_layout, True)
+                self.show_hide_widgets(self.other_table_layout, False)
+            
+            # Show/hide finish-specific options
+            finish = self.finish_combo.currentText()
+            self.show_hide_widgets(self.powder_color_layout, finish == 'Powder Coated')
+            self.show_hide_widgets(self.special_color_layout, finish == 'Special Color')
             
             # Check if damper option is available for this product
-            # Get the current finish selection
-            finish = self.finish_combo.currentText()
             if finish and finish != 'No finishes available':
                 has_damper = self.price_loader.has_damper_option(product, finish)
-                if has_damper:
-                    # Show damper checkbox
-                    self.damper_layout.itemAt(0).widget().show()  # Options label
-                    self.damper_layout.itemAt(1).widget().show()  # damper checkbox
-                else:
-                    # Hide damper checkbox and uncheck it
+                self.show_hide_widgets(self.damper_layout, has_damper)
+                if not has_damper:
                     self.damper_check.setChecked(False)
-                    self.damper_layout.itemAt(0).widget().hide()  # Options label
-                    self.damper_layout.itemAt(1).widget().hide()  # damper checkbox
             else:
                 # No valid finish selected, hide damper option
                 self.damper_check.setChecked(False)
-                self.damper_layout.itemAt(0).widget().hide()  # Options label
-                self.damper_layout.itemAt(1).widget().hide()  # damper checkbox
+                self.show_hide_widgets(self.damper_layout, False)
         
         self.update_price_display()
+    
+    def show_hide_widgets(self, layout, show):
+        """Helper method to show or hide widgets in a layout"""
+        for i in range(layout.count()):
+            widget = layout.itemAt(i).widget()
+            if widget:
+                widget.setVisible(show)
+    
+    def position_dropdown(self):
+        """Position the dropdown below the product input field"""
+        if not hasattr(self, 'product_input_widget'):
+            return
+        
+        # Get the position of the product input field relative to the main widget
+        input_pos = self.product_input_widget.mapTo(self.product_dropdown.parent(), self.product_input_widget.rect().bottomLeft())
+        
+        # Set the dropdown position and size
+        self.product_dropdown.move(input_pos.x(), input_pos.y())
+        self.product_dropdown.resize(self.product_input_widget.width(), 150)
+        self.product_dropdown.raise_()  # Bring to front
+    
+    def on_product_text_changed(self):
+        """Handle product text input changes for search functionality"""
+        if not hasattr(self, 'available_models') or not self.available_models:
+            return
+        
+        search_text = self.product_input.text().strip().lower()
+        
+        # Clear and hide dropdown if no search text
+        if not search_text:
+            self.product_dropdown.clear()
+            self.product_dropdown.setVisible(False)
+            return
+        
+        # Find matching models
+        matching_models = [model for model in self.available_models 
+                          if search_text in model.lower()]
+        
+        # Update dropdown with matching models
+        self.product_dropdown.clear()
+        if matching_models:
+            for model in matching_models[:10]:  # Limit to 10 results for better UX
+                self.product_dropdown.addItem(model)
+            
+            # Position the dropdown below the product input
+            self.position_dropdown()
+            self.product_dropdown.setVisible(True)
+        else:
+            self.product_dropdown.setVisible(False)
+    
+    def on_product_selected(self):
+        """Handle when user presses Enter or selects a product"""
+        if not self.price_loader:
+            return
+        
+        product = self.product_input.text().strip()
+        if not product:
+            return
+        
+        # Validate that the product exists in available models
+        if hasattr(self, 'available_models') and product not in self.available_models:
+            # Try to find a close match
+            matching_models = [model for model in self.available_models 
+                              if product.lower() in model.lower()]
+            if matching_models:
+                # Use the first match
+                product = matching_models[0]
+                self.product_input.setText(product)
+            else:
+                # No match found, show error
+                QMessageBox.warning(self, 'Product Not Found', 
+                                  f'Product "{product}" not found. Please check the spelling or try a different search term.')
+                return
+        
+        # Proceed with the product selection logic
+        self.on_product_changed()
+    
+    def on_dropdown_item_selected(self, item):
+        """Handle when user clicks on a dropdown item"""
+        selected_product = item.text()
+        self.product_input.setText(selected_product)
+        self.product_dropdown.setVisible(False)
+        self.on_product_selected()
+    
+    def on_product_input_focus_out(self, event):
+        """Handle when focus leaves the product input"""
+        # Hide dropdown when focus is lost
+        self.product_dropdown.setVisible(False)
+        # Call the original focusOutEvent
+        QLineEdit.focusOutEvent(self.product_input, event)
+    
+    def on_product_input_key_press(self, event):
+        """Handle keyboard navigation for product input"""
+        if self.product_dropdown.isVisible() and self.product_dropdown.count() > 0:
+            if event.key() == Qt.Key_Down:
+                # Move to first item or next item
+                current_row = self.product_dropdown.currentRow()
+                if current_row < self.product_dropdown.count() - 1:
+                    self.product_dropdown.setCurrentRow(current_row + 1)
+                else:
+                    self.product_dropdown.setCurrentRow(0)
+                return
+            elif event.key() == Qt.Key_Up:
+                # Move to previous item or last item
+                current_row = self.product_dropdown.currentRow()
+                if current_row > 0:
+                    self.product_dropdown.setCurrentRow(current_row - 1)
+                else:
+                    self.product_dropdown.setCurrentRow(self.product_dropdown.count() - 1)
+                return
+            elif event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+                # Select the highlighted item
+                current_item = self.product_dropdown.currentItem()
+                if current_item:
+                    self.on_dropdown_item_selected(current_item)
+                return
+            elif event.key() == Qt.Key_Escape:
+                # Hide dropdown
+                self.product_dropdown.setVisible(False)
+                return
+        
+        # Call the original keyPressEvent for other keys
+        QLineEdit.keyPressEvent(self.product_input, event)
     
     def on_selection_changed(self):
         """Handle selection changes"""
         if not self.price_loader:
             return
         
-        product = self.product_combo.currentText()
+        product = self.product_input.text().strip()
         finish = self.finish_combo.currentText()
         
         if product and finish:
+            # Show/hide finish-specific options
+            self.show_hide_widgets(self.powder_color_layout, finish == 'Powder Coated')
+            self.show_hide_widgets(self.special_color_layout, finish == 'Special Color')
+            
             # Check if damper option is available for this product/finish combination
             has_damper = self.price_loader.has_damper_option(product, finish)
-            if has_damper:
-                # Show damper checkbox
-                self.damper_layout.itemAt(0).widget().show()  # Options label
-                self.damper_layout.itemAt(1).widget().show()  # damper checkbox
-            else:
-                # Hide damper checkbox and uncheck it
+            self.show_hide_widgets(self.damper_layout, has_damper)
+            if not has_damper:
                 self.damper_check.setChecked(False)
-                self.damper_layout.itemAt(0).widget().hide()  # Options label
-                self.damper_layout.itemAt(1).widget().hide()  # damper checkbox
         
         self.update_price_display()
     
@@ -674,15 +848,15 @@ class QuotationApp(QMainWindow):
             
             # Update spin box ranges for mm
             self.width_spin.setMinimum(1)
-            self.width_spin.setMaximum(2500)
+            self.width_spin.setMaximum(9999)
             self.width_spin.setValue(100)  # 100mm ≈ 4 inches
             
             self.height_spin.setMinimum(1)
-            self.height_spin.setMaximum(2500)
+            self.height_spin.setMaximum(9999)
             self.height_spin.setValue(100)  # 100mm ≈ 4 inches
             
             self.other_table_spin.setMinimum(1)
-            self.other_table_spin.setMaximum(2500)
+            self.other_table_spin.setMaximum(9999)
             self.other_table_spin.setValue(100)  # 100mm ≈ 4 inches
         else:
             # Update labels
@@ -692,15 +866,15 @@ class QuotationApp(QMainWindow):
             
             # Update spin box ranges for inches
             self.width_spin.setMinimum(1)
-            self.width_spin.setMaximum(100)
+            self.width_spin.setMaximum(9999)
             self.width_spin.setValue(4)
             
             self.height_spin.setMinimum(1)
-            self.height_spin.setMaximum(100)
+            self.height_spin.setMaximum(9999)
             self.height_spin.setValue(4)
             
             self.other_table_spin.setMinimum(1)
-            self.other_table_spin.setMaximum(100)
+            self.other_table_spin.setMaximum(9999)
             self.other_table_spin.setValue(4)
         
         self.update_price_display()
@@ -710,8 +884,22 @@ class QuotationApp(QMainWindow):
         if not self.price_loader:
             return
         
-        product = self.product_combo.currentText()
+        product = self.product_input.text().strip()
         finish = self.finish_combo.currentText()
+        
+        # Process finish to include color/multiplier information for price calculation
+        if finish == 'Powder Coated':
+            powder_color = self.powder_color_combo.currentText()
+            finish = f"Powder Coated - {powder_color}"
+        elif finish == 'Special Color':
+            # Add special color name to finish
+            color_name = self.special_color_input.text().strip()
+            if color_name:
+                finish = f"Special Color - {color_name}"
+            else:
+                # No color name entered, use default for display
+                finish = "Special Color - Custom"
+        
         with_damper = self.damper_check.isChecked()
         quantity = self.quantity_spin.value()
         discount = self.discount_spin.value()
@@ -726,7 +914,7 @@ class QuotationApp(QMainWindow):
             
             # Convert to inches if needed (mm to inches: divide by 25.4)
             if unit == 'Millimeters':
-                size_inches = size / 25.4
+                size_inches = size / 25
             else:
                 size_inches = size
             
@@ -757,27 +945,40 @@ class QuotationApp(QMainWindow):
             
             # Convert to inches if needed (mm to inches: divide by 25.4)
             if unit == 'Millimeters':
-                width_inches = width / 25.4
-                height_inches = height / 25.4
+                width_inches = width / 25
+                height_inches = height / 25
             else:
                 width_inches = width
                 height_inches = height
             
             # Find the rounded up size for pricing
             rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
+            
+            # If no rounded size found, try to get price directly (for exceeded dimensions)
             if not rounded_size:
-                self.unit_price_label.setText('N/A')
-                self.total_price_label.setText('฿ 0.00')
-                self.rounded_size_label.setText('N/A')
-                return
-            
-            # Display the rounded size
-            self.rounded_size_label.setText(rounded_size)
-            
-            # Get price using the rounded size
-            unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper)
+                # Try to get price directly with the original dimensions
+                unit_price = self.price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', with_damper)
+                if unit_price == 0:
+                    self.unit_price_label.setText('N/A')
+                    self.total_price_label.setText('฿ 0.00')
+                    self.rounded_size_label.setText('N/A')
+                    return
+                else:
+                    # Display the original size for exceeded dimensions
+                    self.rounded_size_label.setText(f'{width_inches}" x {height_inches}"')
+            else:
+                # Display the rounded size
+                self.rounded_size_label.setText(rounded_size)
+                
+                # Get price using the rounded size
+                unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper)
         
         # Apply discount
+        if unit_price is None:
+            self.unit_price_label.setText('N/A')
+            self.total_price_label.setText('฿ 0.00')
+            return
+        
         discount_amount = unit_price * (discount / 100)
         discounted_unit_price = unit_price - discount_amount
         total_price = discounted_unit_price * quantity
@@ -795,8 +996,22 @@ class QuotationApp(QMainWindow):
         if not self.price_loader:
             return
         
-        product = self.product_combo.currentText()
+        product = self.product_input.text().strip()
         finish = self.finish_combo.currentText()
+        
+        # Add powder coating color to finish if Powder Coated is selected
+        if finish == 'Powder Coated':
+            powder_color = self.powder_color_combo.currentText()
+            finish = f"Powder Coated - {powder_color}"
+        elif finish == 'Special Color':
+            # Add special color name to finish
+            color_name = self.special_color_input.text().strip()
+            if color_name:
+                finish = f"Special Color - {color_name}"
+            else:
+                QMessageBox.warning(self, 'Missing Color Name', 'Please enter a color name for special color.')
+                return
+        
         with_damper = self.damper_check.isChecked()
         quantity = self.quantity_spin.value()
         discount = self.discount_spin.value()
@@ -817,12 +1032,20 @@ class QuotationApp(QMainWindow):
             
             # Find the rounded up size for pricing
             rounded_size = self.price_loader.find_rounded_other_table_size(product, finish, size_inches)
-            if not rounded_size:
-                QMessageBox.warning(self, 'Warning', 'Size not available in price list')
-                return
             
-            # Get price using the rounded size
-            unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper)
+            # If no rounded size found, try to get price directly (for exceeded dimensions)
+            if not rounded_size:
+                # Try to get price directly with the original size
+                unit_price = self.price_loader.get_price_for_other_table(product, finish, f'{size_inches}" diameter', with_damper)
+                if unit_price == 0:
+                    QMessageBox.warning(self, 'Warning', 'Size not available in price list')
+                    return
+                else:
+                    # Use the original size for exceeded dimensions
+                    rounded_size = f'{size_inches}" diameter'
+            else:
+                # Get price using the rounded size
+                unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper)
             
             if unit_price == 0:
                 QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
@@ -868,20 +1091,28 @@ class QuotationApp(QMainWindow):
             
             # Convert to inches if needed
             if unit == 'Millimeters':
-                width_inches = width / 25.4
-                height_inches = height / 25.4
+                width_inches = width / 25
+                height_inches = height / 25
             else:
                 width_inches = width
                 height_inches = height
             
             # Find the rounded up size for pricing
             rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
+            
+            # If no rounded size found, try to get price directly (for exceeded dimensions)
             if not rounded_size:
-                QMessageBox.warning(self, 'Warning', 'Size not available in price list')
-                return
-
-            # Get price using the rounded size
-            unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper)
+                # Try to get price directly with the original dimensions
+                unit_price = self.price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', with_damper)
+                if unit_price == 0:
+                    QMessageBox.warning(self, 'Warning', 'Size not available in price list')
+                    return
+                else:
+                    # Use the original size for exceeded dimensions
+                    rounded_size = f'{width_inches}" x {height_inches}"'
+            else:
+                # Get price using the rounded size
+                unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper)
             
             if unit_price == 0:
                 QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
@@ -1040,4 +1271,5 @@ class QuotationApp(QMainWindow):
         self.quote_number.setText(f"{datetime.now().strftime('%y-%m')}{datetime.now().day:03d}")
         self.refresh_items_table()
         self.statusBar().showMessage('New quote started')
+    
     

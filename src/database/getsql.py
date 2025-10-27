@@ -14,11 +14,10 @@ Output:
 import sqlite3
 import openpyxl
 from pathlib import Path
-from datetime import datetime
 from typing import List, Tuple, Optional, Dict, Set
-import re
 from handlers.other_handler import OtherTableHandler
 from handlers.default_handler import DefaultTableHandler
+from handlers.header_handler import HeaderTableHandler
 from table_models import TableLocation
 
 
@@ -31,6 +30,7 @@ class ExcelToSQLiteConverter:
         self.conn = None
         self.other_handler = OtherTableHandler(self.is_inch_value)
         self.default_handler = DefaultTableHandler(self.is_inch_value)
+        self.header_handler = HeaderTableHandler()
         
         # Will read from Header sheet
         self.header_data = []
@@ -48,21 +48,21 @@ class ExcelToSQLiteConverter:
     
     def create_database(self):
         """Create database structure"""
-        print("Creating database structure...")
         
         self.conn = sqlite3.connect(self.db_file)
         cursor = self.conn.cursor()
         
         # Products table
         cursor.execute('''
-            CREATE TABLE products (
+            CREATE TABLE IF NOT EXISTS products (
                 product_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 table_id INTEGER NOT NULL,
                 model TEXT NOT NULL,
                 sheet_name TEXT NOT NULL,
-                anodized_multiplier REAL,
-                powder_coated_multiplier REAL,
-                other_paint_multiplier REAL,
+                tb_modifier TEXT,
+                anodized_multiplier TEXT,
+                powder_coated_multiplier TEXT,
+                wd_multiplier TEXT,
                 UNIQUE(table_id, model)
             )
         ''')
@@ -83,17 +83,40 @@ class ExcelToSQLiteConverter:
         
         # Indexes for fast lookups
         cursor.execute('''
-            CREATE INDEX idx_price_lookup 
+            CREATE INDEX IF NOT EXISTS idx_price_lookup 
             ON prices(table_id, width, height)
         ''')
         
         cursor.execute('''
-            CREATE INDEX idx_model_lookup 
+            CREATE INDEX IF NOT EXISTS idx_model_lookup 
             ON products(model)
         ''')
         
+        # Row multipliers table for individual height row multipliers (regular and WD)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS row_multipliers (
+                table_id INTEGER NOT NULL,
+                height INTEGER NOT NULL,
+                width_exceeded_multiplier REAL,
+                width_exceeded_multiplier_wd REAL,
+                PRIMARY KEY (table_id, height),
+                FOREIGN KEY (table_id) REFERENCES products(table_id) ON UPDATE CASCADE
+            )
+        ''')
+        
+        # Column multipliers table for individual width column multipliers (regular and WD)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS column_multipliers (
+                table_id INTEGER NOT NULL,
+                width INTEGER NOT NULL,
+                height_exceeded_multiplier REAL,
+                height_exceeded_multiplier_wd REAL,
+                PRIMARY KEY (table_id, width),
+                FOREIGN KEY (table_id) REFERENCES products(table_id) ON UPDATE CASCADE
+            )
+        ''')
+        
         self.conn.commit()
-        print("✓ Database structure created\n")
     
     def is_inch_value(self, value) -> Optional[int]:
         """Check if a cell value is an inch measurement (e.g., '4"', '6"')"""
@@ -105,9 +128,6 @@ class ExcelToSQLiteConverter:
             except ValueError:
                 return None
         return None
-    
-
-
 
     def detect_table_at_position(self, sheet, start_row: int, start_col: int, 
                             processed_areas: Set[Tuple[int, int]]) -> Optional[TableLocation]:
@@ -120,13 +140,11 @@ class ExcelToSQLiteConverter:
         # Try to find a default/standard table first
         default_table = self.default_handler.get_default_table_bounderies(sheet, start_row, start_col)
         if default_table:
-            print(f"        Debug: Found default table at ({start_row}, {start_col})")
             return default_table
         
         # If no default table found, try to detect other table
         other_table = self.other_handler.get_other_table_bounderies(sheet, start_row, start_col)
         if other_table:
-            print(f"        Debug: Found other table at ({start_row}, {start_col})")
             return other_table
         
         return None
@@ -199,8 +217,6 @@ class ExcelToSQLiteConverter:
         
         return tables
     
-    
-
     def extract_and_store_prices(self, sheet, table_loc: TableLocation, table_id: int) -> int:
         """Extract price data from a table and store in database"""
         if table_loc.table_type == "other":
@@ -210,7 +226,7 @@ class ExcelToSQLiteConverter:
         return self.default_handler.extract_default_table_prices(sheet, table_loc, table_id, self.conn)
     
     def read_header_sheet(self, wb):
-        """Read the Header sheet to get table metadata"""
+        """Read the Header sheet to get table metadata using keyword-based detection"""
         print("Reading Header sheet...")
         
         if 'Header' not in wb.sheetnames:
@@ -220,61 +236,39 @@ class ExcelToSQLiteConverter:
         header_sheet = wb['Header']
         self.header_data = []
         
-        # Group entries by sheet name
-        sheet_entries = {}
+        # Detect the Header table using keyword-based detection
+        print("  Detecting Header table structure...")
+        table_loc = self.header_handler.detect_header_table(header_sheet)
         
-        # Read header data
-        for row in header_sheet.iter_rows(min_row=2, values_only=True):
-            table_id, sheet_name, model = row[0], row[1], row[2]
-            anodized_multiplier, powder_coated_multiplier, other_paint_multiplier = row[3], row[4], row[5]
-            
-            if table_id is None or sheet_name is None or model is None:
-                continue
-            
-            # Parse models
-            models = [m.strip() for m in str(model).split(',')]
-            
-            # Parse multipliers
-            anodized_multipliers = []
-            if anodized_multiplier is not None and str(anodized_multiplier).strip().lower() != 'none':
-                anodized_multipliers = [float(m.strip()) for m in str(anodized_multiplier).split(',')]
-            
-            powder_coated_multipliers = []
-            if powder_coated_multiplier is not None and str(powder_coated_multiplier).strip().lower() != 'none':
-                powder_coated_multipliers = [float(m.strip()) for m in str(powder_coated_multiplier).split(',')]
-            
-            other_paint_multipliers = []
-            if other_paint_multiplier is not None and str(other_paint_multiplier).strip().lower() != 'none':
-                other_paint_multipliers = [float(m.strip()) for m in str(other_paint_multiplier).split(',')]
-            
-            # Adjust multiplier lists to match model count
-            if len(anodized_multipliers) == 1:
-                anodized_multipliers = anodized_multipliers * len(models)
-            elif len(anodized_multipliers) > 0 and len(anodized_multipliers) < len(models):
-                anodized_multipliers.extend([anodized_multipliers[-1]] * (len(models) - len(anodized_multipliers)))
-            
-            if len(powder_coated_multipliers) == 1:
-                powder_coated_multipliers = powder_coated_multipliers * len(models)
-            elif len(powder_coated_multipliers) > 0 and len(powder_coated_multipliers) < len(models):
-                powder_coated_multipliers.extend([powder_coated_multipliers[-1]] * (len(models) - len(powder_coated_multipliers)))
-            
-            if len(other_paint_multipliers) == 1:
-                other_paint_multipliers = other_paint_multipliers * len(models)
-            elif len(other_paint_multipliers) > 0 and len(other_paint_multipliers) < len(models):
-                other_paint_multipliers.extend([other_paint_multipliers[-1]] * (len(models) - len(other_paint_multipliers)))
-            
-            entry = {
-                'table_id': int(table_id),
-                'sheet_name': str(sheet_name),
-                'models': models,
-                'anodized_multipliers': anodized_multipliers,
-                'powder_coated_multipliers': powder_coated_multipliers,
-                'other_paint_multipliers': other_paint_multipliers
-            }
-            
-            self.header_data.append(entry)
-            
-            # Group by sheet name for multi-table detection
+        if table_loc is None:
+            print("❌ Error: Could not detect Header table structure!")
+            return False
+        
+        # Get column mapping using keywords
+        print("  Mapping columns using keywords...")
+        column_mapping = self.header_handler.get_column_mapping(header_sheet, table_loc)
+        
+        # Check if we found all required columns
+        required_columns = ['table_id', 'sheet_name', 'model']
+        missing_columns = [col for col in required_columns if col not in column_mapping]
+        
+        if missing_columns:
+            print(f"❌ Error: Missing required columns: {missing_columns}")
+            print("  Available columns found:", list(column_mapping.keys()))
+            return False
+        
+        # Extract header data using the column mapping
+        print("  Extracting header data...")
+        self.header_data = self.header_handler.extract_header_data(header_sheet, table_loc, column_mapping)
+        
+        if not self.header_data:
+            print("❌ Error: No valid header data found!")
+            return False
+        
+        # Group entries by sheet name for multi-table detection
+        sheet_entries = {}
+        for entry in self.header_data:
+            sheet_name = entry['sheet_name']
             if sheet_name not in sheet_entries:
                 sheet_entries[sheet_name] = []
             sheet_entries[sheet_name].append(entry)
@@ -283,22 +277,24 @@ class ExcelToSQLiteConverter:
         self.sheet_entries = sheet_entries
         
         print(f"✓ Found {len(self.header_data)} table(s) in Header sheet")
-        print(f"✓ Sheets with multiple tables: {[s for s, e in sheet_entries.items() if len(e) > 1]}\n")
+        print(f"✓ Sheets with multiple tables: {[s for s, e in sheet_entries.items() if len(e) > 1]}")
+        print(f"✓ Column mapping: {column_mapping}\n")
         return True
     
-    def insert_products(self, table_id, sheet_name, models, anodized_multipliers, powder_coated_multipliers, other_paint_multipliers):
+    def insert_products(self, table_id, sheet_name, models, tb_modifiers, anodized_multipliers, powder_coated_multipliers, wd_multipliers):
         """Insert product records for a table"""
         cursor = self.conn.cursor()
         
         for i, model in enumerate(models):
+            tb_mod = tb_modifiers[i] if i < len(tb_modifiers) else None
             anodized_mult = anodized_multipliers[i] if i < len(anodized_multipliers) else None
             powder_mult = powder_coated_multipliers[i] if i < len(powder_coated_multipliers) else None
-            other_paint_mult = other_paint_multipliers[i] if i < len(other_paint_multipliers) else None
+            wd_mult = wd_multipliers[i] if i < len(wd_multipliers) else None
             
             cursor.execute('''
-                INSERT OR IGNORE INTO products (table_id, model, sheet_name, anodized_multiplier, powder_coated_multiplier, other_paint_multiplier)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (table_id, model, sheet_name, anodized_mult, powder_mult, other_paint_mult))
+                INSERT OR IGNORE INTO products (table_id, model, sheet_name, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_multiplier)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (table_id, model, sheet_name, tb_mod, anodized_mult, powder_mult, wd_mult))
             self.stats['total_products'] += 1
     
     def extract_tables_from_sheet(self, sheet, sheet_name):
@@ -323,7 +319,7 @@ class ExcelToSQLiteConverter:
                 # Insert products
                 self.insert_products(
                     entry['table_id'], sheet_name, entry['models'],
-                    entry['anodized_multipliers'], entry['powder_coated_multipliers'], entry['other_paint_multipliers']
+                    entry['tb_modifiers'], entry['anodized_multipliers'], entry['powder_coated_multipliers'], entry['wd_multipliers']
                 )
                 
                 # Process the table
@@ -383,6 +379,8 @@ class ExcelToSQLiteConverter:
         print("-" * 70)
         
         processed_sheets = set()
+        commit_counter = 0
+        COMMIT_INTERVAL = 5  # Commit every 5 sheets
         
         for sheet_name in self.sheet_entries.keys():
             if sheet_name in processed_sheets:
@@ -408,13 +406,20 @@ class ExcelToSQLiteConverter:
                     self.stats['skipped_sheets'] += 1
                 
                 processed_sheets.add(sheet_name)
+                commit_counter += 1
+                
+                # Periodic commit to prevent memory issues and I/O errors
+                if commit_counter >= COMMIT_INTERVAL:
+                    self.conn.commit()
+                    print(f"  ✓ Committed changes (processed {commit_counter} sheets)")
+                    commit_counter = 0
                     
             except Exception as e:
                 print(f"  ❌ Error: {str(e)}")
                 self.stats['errors'].append(f"{sheet_name}: {str(e)}")
                 self.stats['skipped_sheets'] += 1
         
-        # Commit all changes
+        # Final commit
         self.conn.commit()
         self.conn.close()
         
@@ -451,7 +456,7 @@ class ExcelToSQLiteConverter:
 
 if __name__ == "__main__":
     # Configuration
-    EXCEL_FILE = '../../data/price_list_modified.xlsx'  # Your Excel file name
+    EXCEL_FILE = '../../data/Price List Update FEB 2024_Modified.xlsx'  # Your Excel file name
     DATABASE_FILE = '../../prices.db'               # Output database name
     
     print("\n")

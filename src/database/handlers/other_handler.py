@@ -60,15 +60,9 @@ class OtherTableHandler:
         
         # Validate table boundaries
         if end_row is None or end_col is None:
-            print(f"        Debug: Invalid table boundaries - end_row: {end_row}, end_col: {end_col}")
+            print(f"⚠ Warning: Invalid table boundaries - end_row: {end_row}, end_col: {end_col}")
             return None
         
-        print(f"        Debug: Start_row: ({start_row})")
-        print(f"        Debug: Start_col: ({start_col})")
-        print(f"        Debug: End_row: ({end_row})")
-        print(f"        Debug: End_col: ({end_col})")
-        print(f"        Debug: Width_row: ({width_row})")
-        print(f"        Debug: Height_col: ({height_col})")
 
         return TableLocation(
             start_row=start_row,
@@ -95,6 +89,11 @@ class OtherTableHandler:
         cursor = conn.cursor()
         price_count = 0
         
+        # Detect if inch rows are separated or adjacent
+        # Check if the next row after width_row is also an inch row
+        next_row_value = sheet.cell(table_loc.width_row + 1, table_loc.start_col).value
+        is_separated = not self.is_inch_value(next_row_value)
+        
         # Get width cell
         for col in range(table_loc.height_col, table_loc.end_col + 1):
             # Check if column header contains valid keywords
@@ -104,8 +103,10 @@ class OtherTableHandler:
                 
             width = None
             
-            # Get height cell
-            for row in range(table_loc.width_row, table_loc.end_row):
+            # Get height cell - use appropriate step based on separation
+            step = 2 if is_separated else 1
+            end_row = table_loc.end_row + 1 if not is_separated else table_loc.end_row
+            for row in range(table_loc.width_row, end_row, step):
                 height = self.is_inch_value(sheet.cell(row, table_loc.start_col).value)
                 if height is None:
                     continue
@@ -116,9 +117,14 @@ class OtherTableHandler:
                     normal_price_cell = sheet.cell(row, col).value
                     normal_price = float(normal_price_cell) if normal_price_cell and isinstance(normal_price_cell, (int, float)) else None
                     
-                    # Price with damper (mm row - next row)
-                    damper_price_cell = sheet.cell(row + 1, col).value
-                    damper_price = float(damper_price_cell) if damper_price_cell and isinstance(damper_price_cell, (int, float)) else None
+                    # Price with damper - adjust based on separation
+                    if is_separated:
+                        # Inch rows are separated by 1 row, damper price is in next row
+                        damper_price_cell = sheet.cell(row + 1, col).value
+                        damper_price = float(damper_price_cell) if damper_price_cell and isinstance(damper_price_cell, (int, float)) else None
+                    else:
+                        # Inch rows are adjacent, no damper price
+                        damper_price = None
                     
                     # Insert if at least one price exists
                     if normal_price is not None or damper_price is not None:
@@ -132,3 +138,4 @@ class OtherTableHandler:
                     continue
         
         return price_count
+        
