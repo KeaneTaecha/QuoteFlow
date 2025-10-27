@@ -40,7 +40,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: QuoteFlow-macOS
-        path: dist/QuoteFlow.app
+        path: dist/QuoteFlow.app/
         retention-days: 30
 
     - name: Upload build logs
