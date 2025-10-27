@@ -1,0 +1,35 @@
+name: Build Windows Executable (OneDir - Less Warnings)
+
+on:
+  workflow_dispatch:
+    # Manual trigger only
+
+jobs:
+  build-windows-onedir:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build Windows executable (OneDir)
+      run: |
+        # Build as directory instead of single file (less likely to trigger warnings)
+        pyinstaller --onedir --windowed --name "QuoteFlow" --add-data="src/ui;ui" --add-data="src/database;database" --add-data="src/excel_exporter.py;." --add-data="data/quotation_template.xlsx;data" --add-data="prices.db;." --hidden-import="ui.quotation_ui" --hidden-import="database.price_loader" --hidden-import="database.getsql" --hidden-import="database.handlers.default_handler" --hidden-import="database.handlers.header_handler" --hidden-import="database.handlers.other_handler" --hidden-import="excel_exporter" --hidden-import="sqlite3" --hidden-import="openpyxl" --exclude-module="matplotlib" --exclude-module="numpy" --exclude-module="scipy" --exclude-module="pandas" --exclude-module="tkinter" --exclude-module="PIL" --exclude-module="cv2" --exclude-module="torch" --exclude-module="torchvision" --exclude-module="sklearn" --exclude-module="skimage" --exclude-module="tensorflow" --exclude-module="keras" --exclude-module="h5py" --exclude-module="sympy" --exclude-module="jinja2" --exclude-module="pygments" --exclude-module="imageio" --exclude-module="psutil" --exclude-module="setuptools" --exclude-module="distutils" --exclude-module="pkg_resources" --exclude-module="packaging" --exclude-module="certifi" --exclude-module="charset_normalizer" --exclude-module="requests" --exclude-module="urllib3" --exclude-module="werkzeug" --exclude-module="cpuinfo" --exclude-module="appdirs" src/main.py
+
+    - name: Upload Windows executable directory
+      uses: actions/upload-artifact@v4
+      with:
+        name: QuoteFlow-Windows-OneDir
+        path: dist/QuoteFlow/
+        retention-days: 30

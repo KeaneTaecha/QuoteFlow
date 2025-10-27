@@ -30,6 +30,12 @@ jobs:
       run: |
         pyinstaller QuoteFlow.spec
 
+    - name: Sign macOS application (optional)
+      if: false # Set to true if you have a code signing certificate
+      run: |
+        # Add code signing here if you have a certificate
+        # codesign --force --deep --sign "Developer ID Application: Your Name" dist/QuoteFlow.app
+
     - name: Upload macOS application
       uses: actions/upload-artifact@v4
       with:

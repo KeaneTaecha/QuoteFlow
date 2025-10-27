@@ -119,6 +119,12 @@ jobs:
       run: |
         pyinstaller QuoteFlow-Windows.spec
 
+    - name: Sign Windows executable (optional)
+      if: false # Set to true if you have a code signing certificate
+      run: |
+        # Add code signing here if you have a certificate
+        # signtool sign /f "certificate.pfx" /p "password" /t "http://timestamp.digicert.com" dist/QuoteFlow.exe
+
     - name: Upload Windows executable
       uses: actions/upload-artifact@v4
       with:
