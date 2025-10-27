@@ -33,9 +33,16 @@ jobs:
         # Add code signing here if you have a certificate
         # codesign --force --deep --sign "Developer ID Application: Your Name" dist/QuoteFlow.app
 
+    - name: Package .app bundle for upload
+      run: |
+        # Create a zip file of the .app bundle to ensure proper upload
+        cd dist
+        zip -r QuoteFlow-macOS-OneDir.zip QuoteFlow.app
+        ls -la QuoteFlow-macOS-OneDir.zip
+
     - name: Upload macOS application directory
       uses: actions/upload-artifact@v4
       with:
         name: QuoteFlow-macOS-OneDir
-        path: dist/QuoteFlow.app/
+        path: dist/QuoteFlow-macOS-OneDir.zip
         retention-days: 30
