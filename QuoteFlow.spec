@@ -10,7 +10,8 @@ a = Analysis(
         ('src/database', 'database'),
         ('src/excel_exporter.py', '.'),
         ('data/quotation_template.xlsx', 'data'),
-        ('prices.db', '.')
+        ('prices.db', '.'),
+        ('assets', 'assets')
     ],
     hiddenimports=[
         'ui.quotation_ui',

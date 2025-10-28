@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QLineEdit, QMessageBox, QFileDialog, QHeaderView,
                              QGridLayout, QTextEdit, QDateEdit, QTabWidget, QListWidget)
 from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QFont, QColor, QIcon
 
 from database.price_loader import PriceListLoader
 from excel_exporter import ExcelQuotationExporter
@@ -33,6 +33,9 @@ class QuotationApp(QMainWindow):
         """Initialize the user interface"""
         self.setWindowTitle('Quotation System - HRG & WSG Products')
         self.setGeometry(100, 100, 1500, 900)
+        
+        # Set window icon
+        self.set_window_icon()
         
         # Main widget and layout
         main_widget = QWidget()
@@ -81,6 +84,32 @@ class QuotationApp(QMainWindow):
         self.product_dropdown.setAttribute(Qt.WA_ShowWithoutActivating)
         
         self.statusBar().showMessage('Ready')
+    
+    def set_window_icon(self):
+        """Set the window icon for the application"""
+        try:
+            # Handle both development and bundled executable paths
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable - icon is in the root of extracted files
+                application_path = sys._MEIPASS
+                icon_path = os.path.join(application_path, 'assets', 'icon.ico')
+            else:
+                # Running as script
+                application_path = os.path.dirname(os.path.abspath(__file__))
+                icon_path = os.path.join(application_path, '..', '..', 'assets', 'icon.ico')
+            
+            if os.path.exists(icon_path):
+                icon = QIcon(icon_path)
+                self.setWindowIcon(icon)
+            else:
+                # Fallback: try PNG icon
+                png_path = icon_path.replace('.ico', '.png')
+                if os.path.exists(png_path):
+                    icon = QIcon(png_path)
+                    self.setWindowIcon(icon)
+        except Exception as e:
+            # If icon loading fails, continue without icon
+            print(f"Warning: Could not load window icon: {e}")
     
     def create_quote_info_section(self):
         """Create the quote information input section"""
