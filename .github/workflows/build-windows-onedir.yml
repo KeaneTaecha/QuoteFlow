@@ -55,8 +55,8 @@ jobs:
         resized = rounded_img.resize((256, 256), Image.LANCZOS)
         resized.save('assets/icon.ico', format='ICO')
 
-        print(f'Generated ICO file')
-        print(f'File size: {os.path.getsize("assets/icon.ico")} bytes')
+        print('Generated ICO file')
+        print('File size:', os.path.getsize('assets/icon.ico'), 'bytes')
 
         # Test if it works
         try:
