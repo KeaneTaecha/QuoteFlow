@@ -31,7 +31,7 @@ class QuotationApp(QMainWindow):
     
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle('Quotation System - HRG & WSG Products')
+        self.setWindowTitle('Quotation System')
         self.setGeometry(100, 100, 1500, 900)
         
         # Set window icon
