@@ -1,8 +1,7 @@
-name: Build Windows Executable (OneDir - Less Warnings)
+name: Build Windows Executable (OneDir)
 
 on:
   workflow_dispatch:
-    # Manual trigger only
 
 jobs:
   build-windows-onedir:
@@ -22,16 +21,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Verify Pillow installation
-      run: |
-        python -c "import PIL; print('Pillow version:', PIL.__version__)"
-        python -c "from PIL import Image; print('PIL Image module available')"
-
-    - name: Verify icon files exist
-      run: |
-        dir assets\
-        Get-ChildItem assets\icon.ico
-
     - name: Generate ICO file
       run: |
         python -c "
@@ -46,30 +35,16 @@ jobs:
             output.paste(image, mask=mask)
             return output
 
-        # Open and process the PNG
-        img = Image.open('assets/icon.png')
-        img = img.convert('RGBA')
+        img = Image.open('assets/icon.png').convert('RGBA')
         rounded_img = add_rounded_corners(img, radius=200)
-
-        # Create a 256x256 ICO file (most important size for Windows)
         resized = rounded_img.resize((256, 256), Image.LANCZOS)
         resized.save('assets/icon.ico', format='ICO')
-
-        print('Generated ICO file')
-        print('File size:', os.path.getsize('assets/icon.ico'), 'bytes')
-
-        # Test if it works
-        try:
-            test_img = Image.open('assets/icon.ico')
-            print(f'ICO test: {test_img.size}, {test_img.mode} - SUCCESS!')
-        except Exception as e:
-            print(f'ICO test failed: {e}')
+        print('Generated ICO file:', os.path.getsize('assets/icon.ico'), 'bytes')
         "
 
     - name: Build Windows executable (OneDir)
       run: |
-        # Build as directory instead of single file (less likely to trigger warnings)
-        pyinstaller --onedir --windowed --name "QuoteFlow" --icon="assets/icon.ico" --add-data="src/ui;ui" --add-data="src/database;database" --add-data="src/excel_exporter.py;." --add-data="data/quotation_template.xlsx;data" --add-data="prices.db;." --hidden-import="ui.quotation_ui" --hidden-import="database.price_loader" --hidden-import="database.getsql" --hidden-import="database.handlers.default_handler" --hidden-import="database.handlers.header_handler" --hidden-import="database.handlers.other_handler" --hidden-import="excel_exporter" --hidden-import="sqlite3" --hidden-import="openpyxl" --exclude-module="matplotlib" --exclude-module="numpy" --exclude-module="scipy" --exclude-module="pandas" --exclude-module="tkinter" --exclude-module="PIL" --exclude-module="cv2" --exclude-module="torch" --exclude-module="torchvision" --exclude-module="sklearn" --exclude-module="skimage" --exclude-module="tensorflow" --exclude-module="keras" --exclude-module="h5py" --exclude-module="sympy" --exclude-module="jinja2" --exclude-module="pygments" --exclude-module="imageio" --exclude-module="psutil" --exclude-module="setuptools" --exclude-module="distutils" --exclude-module="pkg_resources" --exclude-module="packaging" --exclude-module="certifi" --exclude-module="charset_normalizer" --exclude-module="requests" --exclude-module="urllib3" --exclude-module="werkzeug" --exclude-module="cpuinfo" --exclude-module="appdirs" src/main.py
+        pyinstaller --onedir --windowed --name "QuoteFlow" --icon="assets/icon.ico" --add-data="src/ui;ui" --add-data="src/database;database" --add-data="src/excel_exporter.py;." --add-data="data/quotation_template.xlsx;data" --add-data="prices.db;." --add-data="assets;assets" --hidden-import="ui.quotation_ui" --hidden-import="database.price_loader" --hidden-import="database.getsql" --hidden-import="database.handlers.default_handler" --hidden-import="database.handlers.header_handler" --hidden-import="database.handlers.other_handler" --hidden-import="excel_exporter" --hidden-import="sqlite3" --hidden-import="openpyxl" src/main.py
 
     - name: Upload Windows executable directory
       uses: actions/upload-artifact@v4

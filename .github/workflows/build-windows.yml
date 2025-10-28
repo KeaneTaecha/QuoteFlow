@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
-    # Allow manual triggering
 
 jobs:
   build-windows:
@@ -26,16 +25,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Verify Pillow installation
-      run: |
-        python -c "import PIL; print('Pillow version:', PIL.__version__)"
-        python -c "from PIL import Image; print('PIL Image module available')"
-
-    - name: Verify icon files exist
-      run: |
-        dir assets\
-        Get-ChildItem assets\icon.ico
-
     - name: Generate ICO file
       run: |
         python -c "
@@ -50,35 +39,15 @@ jobs:
             output.paste(image, mask=mask)
             return output
 
-        # Open and process the PNG
-        img = Image.open('assets/icon.png')
-        img = img.convert('RGBA')
+        img = Image.open('assets/icon.png').convert('RGBA')
         rounded_img = add_rounded_corners(img, radius=200)
-
-        # Create a 256x256 ICO file (most important size for Windows)
         resized = rounded_img.resize((256, 256), Image.LANCZOS)
         resized.save('assets/icon.ico', format='ICO')
-
-        print('Generated ICO file')
-        print('File size:', os.path.getsize('assets/icon.ico'), 'bytes')
-
-        # Test if it works
-        try:
-            test_img = Image.open('assets/icon.ico')
-            print(f'ICO test: {test_img.size}, {test_img.mode} - SUCCESS!')
-        except Exception as e:
-            print(f'ICO test failed: {e}')
+        print('Generated ICO file:', os.path.getsize('assets/icon.ico'), 'bytes')
         "
 
     - name: Build executable
-      run: |
-        pyinstaller QuoteFlow.spec
-
-    - name: Sign Windows executable (optional)
-      if: false # Set to true if you have a code signing certificate
-      run: |
-        # Add code signing here if you have a certificate
-        # signtool sign /f "certificate.pfx" /p "password" /t "http://timestamp.digicert.com" dist/QuoteFlow.exe
+      run: pyinstaller QuoteFlow.spec
 
     - name: Upload Windows executable
       uses: actions/upload-artifact@v4
@@ -86,13 +55,3 @@ jobs:
         name: QuoteFlow-Windows
         path: dist/QuoteFlow.exe
         retention-days: 30
-
-    - name: Upload build logs
-      uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: build-logs-windows
-        path: |
-          build/
-          *.log
-        retention-days: 7

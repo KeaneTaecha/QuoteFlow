@@ -88,28 +88,15 @@ class QuotationApp(QMainWindow):
     def set_window_icon(self):
         """Set the window icon for the application"""
         try:
-            # Handle both development and bundled executable paths
             if getattr(sys, 'frozen', False):
-                # Running as compiled executable - icon is in the root of extracted files
-                application_path = sys._MEIPASS
-                icon_path = os.path.join(application_path, 'assets', 'icon.ico')
+                icon_path = os.path.join(sys._MEIPASS, 'assets', 'icon.ico')
             else:
-                # Running as script
-                application_path = os.path.dirname(os.path.abspath(__file__))
-                icon_path = os.path.join(application_path, '..', '..', 'assets', 'icon.ico')
+                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'assets', 'icon.ico')
             
             if os.path.exists(icon_path):
-                icon = QIcon(icon_path)
-                self.setWindowIcon(icon)
-            else:
-                # Fallback: try PNG icon
-                png_path = icon_path.replace('.ico', '.png')
-                if os.path.exists(png_path):
-                    icon = QIcon(png_path)
-                    self.setWindowIcon(icon)
-        except Exception as e:
-            # If icon loading fails, continue without icon
-            print(f"Warning: Could not load window icon: {e}")
+                self.setWindowIcon(QIcon(icon_path))
+        except Exception:
+            pass  # Continue without icon if loading fails
     
     def create_quote_info_section(self):
         """Create the quote information input section"""
@@ -243,17 +230,15 @@ class QuotationApp(QMainWindow):
         self.product_dropdown.setStyleSheet("""
             QListWidget {
                 border: 1px solid #ccc;
-                background-color: palette(base);
-                color: palette(text);
+                background-color: white;
                 selection-background-color: #0078d4;
             }
             QListWidget::item {
                 padding: 5px;
-                border-bottom: 1px solid palette(mid);
-                color: palette(text);
+                border-bottom: 1px solid #eee;
             }
             QListWidget::item:hover {
-                background-color: palette(highlight);
+                background-color: #f0f0f0;
             }
             QListWidget::item:selected {
                 background-color: #0078d4;
@@ -453,9 +438,6 @@ class QuotationApp(QMainWindow):
                 color: white;
                 padding: 5px;
                 font-weight: bold;
-                font-size: 12px;
-                min-height: 13px;
-                max-height: 13px;
             }
             QPushButton:hover {
                 background-color: #F57C00;
@@ -531,7 +513,6 @@ class QuotationApp(QMainWindow):
                 color: white;
                 font-weight: bold;
                 padding: 8px 16px;
-                min-height: 20px;
             }
             QPushButton:hover {
                 background-color: #45a049;
@@ -548,7 +529,6 @@ class QuotationApp(QMainWindow):
                 color: white;
                 font-weight: bold;
                 padding: 8px 16px;
-                min-height: 20px;
             }
             QPushButton:hover {
                 background-color: #0D47A1;
@@ -566,7 +546,6 @@ class QuotationApp(QMainWindow):
                 color: white;
                 font-weight: bold;
                 padding: 8px 16px;
-                min-height: 20px;
             }
             QPushButton:hover {
                 background-color: #da190b;

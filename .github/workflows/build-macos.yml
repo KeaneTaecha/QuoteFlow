@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
-    # Allow manual triggering
 
 jobs:
   build-macos:
@@ -25,34 +24,14 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install Pillow  # Required for icon processing
-
-    - name: Verify Pillow installation
-      run: |
-        python -c "import PIL; print('Pillow version:', PIL.__version__)"
-        python -c "from PIL import Image; print('PIL Image module available')"
-
-    - name: Verify icon files exist
-      run: |
-        ls -la assets/
-        file assets/icon.icns
 
     - name: Build macOS application
-      run: |
-        pyinstaller QuoteFlow.spec
-
-    - name: Sign macOS application (optional)
-      if: false # Set to true if you have a code signing certificate
-      run: |
-        # Add code signing here if you have a certificate
-        # codesign --force --deep --sign "Developer ID Application: Your Name" dist/QuoteFlow.app
+      run: pyinstaller QuoteFlow.spec
 
     - name: Package .app bundle for upload
       run: |
-        # Create a zip file of the .app bundle to ensure proper upload
         cd dist
         zip -r QuoteFlow-macOS.zip QuoteFlow.app
-        ls -la QuoteFlow-macOS.zip
 
     - name: Upload macOS application
       uses: actions/upload-artifact@v4
@@ -60,13 +39,3 @@ jobs:
         name: QuoteFlow-macOS
         path: dist/QuoteFlow-macOS.zip
         retention-days: 30
-
-    - name: Upload build logs
-      uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: build-logs-macos
-        path: |
-          build/
-          *.log
-        retention-days: 7
