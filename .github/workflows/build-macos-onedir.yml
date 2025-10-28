@@ -3,6 +3,7 @@ name: Build macOS Application (OneDir)
 on:
   workflow_dispatch:
 
+
 jobs:
   build-macos-onedir:
     runs-on: macos-latest
