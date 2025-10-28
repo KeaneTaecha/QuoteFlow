@@ -310,7 +310,7 @@ class PriceListLoader:
         result = cursor.fetchone()
         return result[0] > 0 if result else False
     
-    def get_price_for_default_table(self, product, finish, size, with_damper=False):
+    def get_price_for_default_table(self, product, finish, size, with_damper=False, special_color_multiplier=1.0):
         """Get price for a specific product configuration using idx_price_lookup index"""
         conn = self._get_connection()
         if not conn:
@@ -405,9 +405,8 @@ class PriceListLoader:
             # Powder Coated uses the same multiplier regardless of color
             finish_multiplier = powder_coated_multiplier
         elif 'Special Color' in finish:
-            # Use a default multiplier for special colors (regardless of color name)
-            # This allows users to enter any color name while maintaining consistent pricing
-            finish_multiplier = 1.5  # Default special color multiplier
+            # Use the user-provided multiplier for special colors
+            finish_multiplier = special_color_multiplier
         
         # Get WD multiplier
         if wd_multiplier is not None:
@@ -460,7 +459,7 @@ class PriceListLoader:
         
         return None
     
-    def get_price_for_other_table(self, product, finish, diameter, with_damper=False):
+    def get_price_for_other_table(self, product, finish, diameter, with_damper=False, special_color_multiplier=1.0):
         """Get price for an other table (diameter-based) product configuration"""
         conn = self._get_connection()
         if not conn:
@@ -534,9 +533,8 @@ class PriceListLoader:
             # Powder Coated uses the same multiplier regardless of color
             finish_multiplier = powder_coated_multiplier
         elif 'Special Color' in finish:
-            # Use a default multiplier for special colors (regardless of color name)
-            # This allows users to enter any color name while maintaining consistent pricing
-            finish_multiplier = 1.5  # Default special color multiplier
+            # Use the user-provided multiplier for special colors
+            finish_multiplier = special_color_multiplier
         
         # Get WD multiplier
         if wd_multiplier is not None:

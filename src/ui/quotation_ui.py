@@ -287,8 +287,22 @@ class QuotationApp(QMainWindow):
         self.special_color_layout.addWidget(self.special_color_input)
         layout.addLayout(self.special_color_layout)
         
-        # Initially hide special color input
+        # Special Color Multiplier (initially hidden)
+        self.special_color_multiplier_layout = QVBoxLayout()
+        self.special_color_multiplier_label = QLabel('Special Color Multiplier:')
+        self.special_color_multiplier_layout.addWidget(self.special_color_multiplier_label)
+        self.special_color_multiplier_spin = QSpinBox()
+        self.special_color_multiplier_spin.setMinimum(1)
+        self.special_color_multiplier_spin.setMaximum(9999)
+        self.special_color_multiplier_spin.setValue(100)  # Default to 1.00 (100/100)
+        self.special_color_multiplier_spin.setSuffix('%')
+        self.special_color_multiplier_spin.valueChanged.connect(self.on_selection_changed)
+        self.special_color_multiplier_layout.addWidget(self.special_color_multiplier_spin)
+        layout.addLayout(self.special_color_multiplier_layout)
+        
+        # Initially hide special color inputs
         self.show_hide_widgets(self.special_color_layout, False)
+        self.show_hide_widgets(self.special_color_multiplier_layout, False)
         
         # Unit Selection
         unit_layout = QVBoxLayout()
@@ -686,6 +700,7 @@ class QuotationApp(QMainWindow):
             finish = self.finish_combo.currentText()
             self.show_hide_widgets(self.powder_color_layout, finish == 'Powder Coated')
             self.show_hide_widgets(self.special_color_layout, finish == 'Special Color')
+            self.show_hide_widgets(self.special_color_multiplier_layout, finish == 'Special Color')
             
             # Check if damper option is available for this product
             if finish and finish != 'No finishes available':
@@ -835,6 +850,7 @@ class QuotationApp(QMainWindow):
             # Show/hide finish-specific options
             self.show_hide_widgets(self.powder_color_layout, finish == 'Powder Coated')
             self.show_hide_widgets(self.special_color_layout, finish == 'Special Color')
+            self.show_hide_widgets(self.special_color_multiplier_layout, finish == 'Special Color')
             
             # Check if damper option is available for this product/finish combination
             has_damper = self.price_loader.has_damper_option(product, finish)
@@ -913,6 +929,11 @@ class QuotationApp(QMainWindow):
         discount = self.discount_spin.value()
         unit = self.unit_combo.currentText()
         
+        # Get special color multiplier if Special Color is selected
+        special_color_multiplier = 1.0  # Default multiplier
+        if self.finish_combo.currentText() == 'Special Color':
+            special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
+        
         # Check if this product uses other table format
         is_other_table = self.price_loader.is_other_table(product)
         
@@ -938,7 +959,7 @@ class QuotationApp(QMainWindow):
             self.rounded_size_label.setText(rounded_size)
             
             # Get price using the rounded size
-            unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper)
+            unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
         else:
             # Handle width/height-based products
             width = self.width_spin.value()
@@ -965,7 +986,7 @@ class QuotationApp(QMainWindow):
             # If no rounded size found, try to get price directly (for exceeded dimensions)
             if not rounded_size:
                 # Try to get price directly with the original dimensions
-                unit_price = self.price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', with_damper)
+                unit_price = self.price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', with_damper, special_color_multiplier)
                 if unit_price == 0:
                     self.unit_price_label.setText('N/A')
                     self.total_price_label.setText('฿ 0.00')
@@ -979,7 +1000,7 @@ class QuotationApp(QMainWindow):
                 self.rounded_size_label.setText(rounded_size)
                 
                 # Get price using the rounded size
-                unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper)
+                unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
         
         # Apply discount
         if unit_price is None:
@@ -1025,6 +1046,11 @@ class QuotationApp(QMainWindow):
         discount = self.discount_spin.value()
         unit = self.unit_combo.currentText()
         
+        # Get special color multiplier if Special Color is selected
+        special_color_multiplier = 1.0  # Default multiplier
+        if self.finish_combo.currentText() == 'Special Color':
+            special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
+        
         # Check if this product uses other table format
         is_other_table = self.price_loader.is_other_table(product)
         
@@ -1044,7 +1070,7 @@ class QuotationApp(QMainWindow):
             # If no rounded size found, try to get price directly (for exceeded dimensions)
             if not rounded_size:
                 # Try to get price directly with the original size
-                unit_price = self.price_loader.get_price_for_other_table(product, finish, f'{size_inches}" diameter', with_damper)
+                unit_price = self.price_loader.get_price_for_other_table(product, finish, f'{size_inches}" diameter', with_damper, special_color_multiplier)
                 if unit_price == 0:
                     QMessageBox.warning(self, 'Warning', 'Size not available in price list')
                     return
@@ -1053,7 +1079,7 @@ class QuotationApp(QMainWindow):
                     rounded_size = f'{size_inches}" diameter'
             else:
                 # Get price using the rounded size
-                unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper)
+                unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
             
             if unit_price == 0:
                 QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
@@ -1111,7 +1137,7 @@ class QuotationApp(QMainWindow):
             # If no rounded size found, try to get price directly (for exceeded dimensions)
             if not rounded_size:
                 # Try to get price directly with the original dimensions
-                unit_price = self.price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', with_damper)
+                unit_price = self.price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', with_damper, special_color_multiplier)
                 if unit_price == 0:
                     QMessageBox.warning(self, 'Warning', 'Size not available in price list')
                     return
@@ -1120,7 +1146,7 @@ class QuotationApp(QMainWindow):
                     rounded_size = f'{width_inches}" x {height_inches}"'
             else:
                 # Get price using the rounded size
-                unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper)
+                unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
             
             if unit_price == 0:
                 QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
