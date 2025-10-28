@@ -60,7 +60,7 @@ jobs:
         resized.save('assets/icon.ico', format='ICO')
 
         print(f'Generated ICO file')
-        print(f'File size: {os.path.getsize(\"assets/icon.ico\")} bytes')
+        print(f'File size: {os.path.getsize("assets/icon.ico")} bytes')
 
         # Test if it works
         try:
