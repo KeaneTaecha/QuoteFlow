@@ -472,14 +472,6 @@ class QuotationApp(QMainWindow):
         # Initially hide other table layout
         self.show_hide_widgets(self.other_table_layout, False)
         
-        # With Damper
-        self.damper_layout = QVBoxLayout()
-        self.damper_layout.addWidget(QLabel('Options:'))
-        self.damper_check = QCheckBox('With Damper (WD)')
-        self.damper_check.stateChanged.connect(self.update_price_display)
-        self.damper_layout.addWidget(self.damper_check)
-        layout.addLayout(self.damper_layout)
-        
         # Quantity
         qty_layout = QVBoxLayout()
         qty_layout.addWidget(QLabel('Quantity:'))
@@ -595,15 +587,15 @@ class QuotationApp(QMainWindow):
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(8)
         self.items_table.setHorizontalHeaderLabels([
-            'Item', 'Product', 'Size', 'Finish', 'Qty', 'Unit Price', 'Discount', 'Total'
+            'Item', 'Product', 'Finish', 'Size', 'Qty', 'Unit Price', 'Discount', 'Total'
         ])
         
         # Set column widths
         header = self.items_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
@@ -772,7 +764,24 @@ class QuotationApp(QMainWindow):
             self.price_loader = PriceListLoader(db_file)
             
             # Store available models for searching
-            self.available_models = self.price_loader.get_available_models()
+            base_models = self.price_loader.get_available_models()
+            # Add "(WD)" variants for products that have damper option
+            self.available_models = []
+            for model in base_models:
+                # Add the base model
+                self.available_models.append(model)
+                # Check if this product has damper option for any finish
+                # We check by trying to get available finishes - if it has damper, add WD variant
+                finishes = self.price_loader.get_available_finishes(model)
+                has_damper = False
+                for finish in finishes:
+                    if self.price_loader.has_damper_option(model, finish):
+                        has_damper = True
+                        break
+                if has_damper:
+                    # Add WD variant
+                    self.available_models.append(f"{model}(WD)")
+            
             if self.available_models:
                 self.statusBar().showMessage(f'Price database loaded successfully ({len(self.available_models)} models found)')
             else:
@@ -782,13 +791,23 @@ class QuotationApp(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, 'Error', f'Failed to load price database: {str(e)}')
     
+    def extract_product_and_wd(self, product_with_wd):
+        """Extract base product name and WD flag from product string"""
+        product = product_with_wd.strip()
+        has_wd = product.endswith("(WD)")
+        if has_wd:
+            # Remove "(WD)" suffix
+            product = product[:-4].strip()
+        return product, has_wd
+    
     def on_product_changed(self):
         """Handle product type change"""
         if not self.price_loader:
             return
         
         # Get available finish options for the selected product
-        product = self.product_input.text().strip()
+        product_with_wd = self.product_input.text().strip()
+        product, _ = self.extract_product_and_wd(product_with_wd)
         if product:
             available_finishes = self.price_loader.get_available_finishes(product)
             
@@ -821,17 +840,6 @@ class QuotationApp(QMainWindow):
             self.show_hide_widgets(self.powder_color_layout, finish == 'Powder Coated')
             self.show_hide_widgets(self.special_color_layout, finish == 'Special Color')
             self.show_hide_widgets(self.special_color_multiplier_layout, finish == 'Special Color')
-            
-            # Check if damper option is available for this product
-            if finish and finish != 'No finishes available':
-                has_damper = self.price_loader.has_damper_option(product, finish)
-                self.show_hide_widgets(self.damper_layout, has_damper)
-                if not has_damper:
-                    self.damper_check.setChecked(False)
-            else:
-                # No valid finish selected, hide damper option
-                self.damper_check.setChecked(False)
-                self.show_hide_widgets(self.damper_layout, False)
         
         self.update_price_display()
     
@@ -889,23 +897,23 @@ class QuotationApp(QMainWindow):
         if not self.price_loader:
             return
         
-        product = self.product_input.text().strip()
-        if not product:
+        product_with_wd = self.product_input.text().strip()
+        if not product_with_wd:
             return
         
         # Validate that the product exists in available models
-        if hasattr(self, 'available_models') and product not in self.available_models:
+        if hasattr(self, 'available_models') and product_with_wd not in self.available_models:
             # Try to find a close match
             matching_models = [model for model in self.available_models 
-                              if product.lower() in model.lower()]
+                              if product_with_wd.lower() in model.lower()]
             if matching_models:
                 # Use the first match
-                product = matching_models[0]
-                self.product_input.setText(product)
+                product_with_wd = matching_models[0]
+                self.product_input.setText(product_with_wd)
             else:
                 # No match found, show error
                 QMessageBox.warning(self, 'Product Not Found', 
-                                  f'Product "{product}" not found. Please check the spelling or try a different search term.')
+                                  f'Product "{product_with_wd}" not found. Please check the spelling or try a different search term.')
                 return
         
         # Proceed with the product selection logic
@@ -963,7 +971,8 @@ class QuotationApp(QMainWindow):
         if not self.price_loader:
             return
         
-        product = self.product_input.text().strip()
+        product_with_wd = self.product_input.text().strip()
+        product, _ = self.extract_product_and_wd(product_with_wd)
         finish = self.finish_combo.currentText()
         
         if product and finish:
@@ -971,12 +980,6 @@ class QuotationApp(QMainWindow):
             self.show_hide_widgets(self.powder_color_layout, finish == 'Powder Coated')
             self.show_hide_widgets(self.special_color_layout, finish == 'Special Color')
             self.show_hide_widgets(self.special_color_multiplier_layout, finish == 'Special Color')
-            
-            # Check if damper option is available for this product/finish combination
-            has_damper = self.price_loader.has_damper_option(product, finish)
-            self.show_hide_widgets(self.damper_layout, has_damper)
-            if not has_damper:
-                self.damper_check.setChecked(False)
         
         self.update_price_display()
     
@@ -1028,7 +1031,8 @@ class QuotationApp(QMainWindow):
         if not self.price_loader:
             return
         
-        product = self.product_input.text().strip()
+        product_with_wd = self.product_input.text().strip()
+        product, with_damper = self.extract_product_and_wd(product_with_wd)
         finish = self.finish_combo.currentText()
         
         # Process finish to include color/multiplier information for price calculation
@@ -1043,8 +1047,6 @@ class QuotationApp(QMainWindow):
             else:
                 # No color name entered, use default for display
                 finish = "Special Color - Custom"
-        
-        with_damper = self.damper_check.isChecked()
         quantity = self.quantity_spin.value()
         discount = self.discount_spin.value()
         unit = self.unit_combo.currentText()
@@ -1145,7 +1147,8 @@ class QuotationApp(QMainWindow):
         if not self.price_loader:
             return
         
-        product = self.product_input.text().strip()
+        product_with_wd = self.product_input.text().strip()
+        product, with_damper = self.extract_product_and_wd(product_with_wd)
         finish = self.finish_combo.currentText()
         
         # Add powder coating color to finish if Powder Coated is selected
@@ -1160,8 +1163,6 @@ class QuotationApp(QMainWindow):
             else:
                 QMessageBox.warning(self, 'Missing Color Name', 'Please enter a color name for special color.')
                 return
-        
-        with_damper = self.damper_check.isChecked()
         quantity = self.quantity_spin.value()
         discount = self.discount_spin.value()
         unit = self.unit_combo.currentText()
@@ -1210,10 +1211,8 @@ class QuotationApp(QMainWindow):
             discounted_unit_price = unit_price - discount_amount
             total_price = discounted_unit_price * quantity
             
-            # Create product title
-            product_code = product
-            if with_damper:
-                product_code += "(WD)"
+            # Create product title - use the original product_with_wd which already has (WD) if applicable
+            product_code = product_with_wd
             
             # Store the original size entered by user with proper unit
             if unit == 'Millimeters':
@@ -1277,10 +1276,8 @@ class QuotationApp(QMainWindow):
             discounted_unit_price = unit_price - discount_amount
             total_price = discounted_unit_price * quantity
             
-            # Create product title
-            product_code = product
-            if with_damper:
-                product_code += "(WD)"
+            # Create product title - use the original product_with_wd which already has (WD) if applicable
+            product_code = product_with_wd
             
             # Store the original size entered by user with proper unit
             if unit == 'Millimeters':
@@ -1354,8 +1351,8 @@ class QuotationApp(QMainWindow):
                 # Title row - no ID number, show title in product column
                 self.items_table.setItem(row, 0, QTableWidgetItem(''))  # No ID for titles
                 self.items_table.setItem(row, 1, QTableWidgetItem(item['title']))
-                self.items_table.setItem(row, 2, QTableWidgetItem(''))  # No size
-                self.items_table.setItem(row, 3, QTableWidgetItem(''))  # No finish
+                self.items_table.setItem(row, 2, QTableWidgetItem(''))  # No finish
+                self.items_table.setItem(row, 3, QTableWidgetItem(''))  # No size
                 self.items_table.setItem(row, 4, QTableWidgetItem(''))  # No quantity
                 self.items_table.setItem(row, 5, QTableWidgetItem(''))  # No unit price
                 self.items_table.setItem(row, 6, QTableWidgetItem(''))  # No discount
@@ -1376,8 +1373,8 @@ class QuotationApp(QMainWindow):
                 # Regular product row
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
                 self.items_table.setItem(row, 1, QTableWidgetItem(item['product_code']))
-                self.items_table.setItem(row, 2, QTableWidgetItem(item['size']))
-                self.items_table.setItem(row, 3, QTableWidgetItem(item['finish']))
+                self.items_table.setItem(row, 2, QTableWidgetItem(item['finish']))
+                self.items_table.setItem(row, 3, QTableWidgetItem(item['size']))
                 self.items_table.setItem(row, 4, QTableWidgetItem(str(item['quantity'])))
                 
                 # Show original unit price
