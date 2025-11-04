@@ -51,11 +51,15 @@ class PriceListLoader:
             Total price including base price plus hand gear addition
         """
         import math
-        # Hand gear calculation: (width*25/1000 rounded up) * (height*25/1000 rounded up) * 600
-        width_factor = math.ceil((width * 25) / 1000)
-        height_factor = math.ceil((height * 25) / 1000)
-        hand_gear_addition = width_factor * height_factor * 600
+        # Hand gear calculation: rounded up(height/1500) x rounded up(width/1500) x hand gear price
+        hand_gear_price = 600
+        height_factor = math.ceil((height * 25) / 1500)
+        width_factor = math.ceil((width * 25) / 1500)
+        hand_gear_addition = height_factor * width_factor * hand_gear_price
         total_price = base_price + hand_gear_addition
+        print(f"Hand gear addition: {hand_gear_addition}")
+        print(f"Base price: {base_price}")
+        print(f"Total price: {total_price}")
         return total_price
     
 
@@ -602,13 +606,13 @@ class PriceListLoader:
     def _calculate_vd_oversized_price(self, conn, table_id, width, height, with_damper=False):
         """
         Calculate price for VD products when dimensions exceed limits:
-        - Height > 80 inch or Width > 40 inch
-        - Use maximum dimensions (80 inch height, 40 inch width) to calculate round-up multipliers
+        - Height > 40 inch or Width > 80 inch
+        - Use maximum dimensions (40 inch height, 80 inch width) to calculate round-up multipliers
         - Find price for the divided dimensions and multiply by round-up numbers
         """
         # Check if dimensions exceed VD limits (using inch values directly)
-        height_exceeds = height > 80  # 80 inch
-        width_exceeds = width > 40   # 40 inch
+        height_exceeds = height > 40  # 40 inch
+        width_exceeds = width > 80   # 80 inch
         
         if not height_exceeds and not width_exceeds:
             return None  # No oversized calculation needed
@@ -618,13 +622,13 @@ class PriceListLoader:
         width_multiplier = 1
         
         if height_exceeds:
-            height_multiplier = math.ceil(height / 80)
+            height_multiplier = math.ceil(height / 40)
             adjusted_height = height / height_multiplier
         else:
             adjusted_height = height
         
         if width_exceeds:
-            width_multiplier = math.ceil(width / 40)
+            width_multiplier = math.ceil(width / 80)
             adjusted_width = width / width_multiplier
         else:
             adjusted_width = width
