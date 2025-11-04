@@ -144,7 +144,7 @@ class PriceListLoader:
         
         # Get the maximum dimensions available in the table
         cursor.execute('''
-            SELECT MAX(width), MAX(height)
+            SELECT MAX(height), MAX(width)
             FROM prices
             WHERE table_id = ?
         ''', (table_id,))
@@ -153,27 +153,27 @@ class PriceListLoader:
         if not max_dims or not max_dims[0] or not max_dims[1]:
             return None
         
-        max_width, max_height = max_dims
+        max_height, max_width = max_dims
         
         # Check if both dimensions exceed limits - use fallback pricing
         if width > max_width and height > max_height:
             # Use the highest available multipliers as fallback
-            # Try to get the highest row multiplier (for width exceeded)
+            # Try to get the highest row multiplier (for height exceeded)
             cursor.execute('''
-                SELECT width_exceeded_multiplier, width_exceeded_multiplier_wd
+                SELECT height_exceeded_multiplier, height_exceeded_multiplier_wd
                 FROM row_multipliers
                 WHERE table_id = ?
-                ORDER BY height DESC
+                ORDER BY width DESC
                 LIMIT 1
             ''', (table_id,))
             row_result = cursor.fetchone()
             
-            # Try to get the highest column multiplier (for height exceeded)
+            # Try to get the highest column multiplier (for width exceeded)
             cursor.execute('''
-                SELECT height_exceeded_multiplier, height_exceeded_multiplier_wd
+                SELECT width_exceeded_multiplier, width_exceeded_multiplier_wd
                 FROM column_multipliers
                 WHERE table_id = ?
-                ORDER BY width DESC
+                ORDER BY height DESC
                 LIMIT 1
             ''', (table_id,))
             col_result = cursor.fetchone()
@@ -192,12 +192,13 @@ class PriceListLoader:
             
             return None
         
-        # Check if only width exceeds limit - use specific height row multiplier
+        # Check if only width exceeds limit - use specific height column multiplier
         elif width > max_width:
-            # Find the closest height row that has a multiplier
+            # Find the closest height column that has a width exceeded multiplier
+            # Use the actual height value to look up in column_multipliers
             cursor.execute('''
                 SELECT width_exceeded_multiplier, width_exceeded_multiplier_wd
-                FROM row_multipliers
+                FROM column_multipliers
                 WHERE table_id = ? AND height <= ?
                 ORDER BY height DESC
                 LIMIT 1
@@ -211,12 +212,13 @@ class PriceListLoader:
                     return result[0]  # Regular multiplier
             return None
         
-        # Check if only height exceeds limit - use specific width column multiplier
+        # Check if only height exceeds limit - use specific width row multiplier
         elif height > max_height:
-            # Find the closest width column that has a multiplier
+            # Find the closest width row that has a height exceeded multiplier
+            # Use the actual width value to look up in row_multipliers
             cursor.execute('''
                 SELECT height_exceeded_multiplier, height_exceeded_multiplier_wd
-                FROM column_multipliers
+                FROM row_multipliers
                 WHERE table_id = ? AND width <= ?
                 ORDER BY width DESC
                 LIMIT 1
@@ -304,7 +306,7 @@ class PriceListLoader:
             SELECT COUNT(*) 
             FROM products p
             JOIN prices pr ON p.table_id = pr.table_id
-            WHERE p.model = ? AND pr.width IS NULL
+            WHERE p.model = ? AND pr.height IS NULL
         ''', (product,))
         
         result = cursor.fetchone()
@@ -360,8 +362,8 @@ class PriceListLoader:
             cursor.execute('''
                 SELECT normal_price, price_with_damper
                 FROM prices
-                WHERE table_id = ? AND width = ? AND height = ?
-            ''', (table_id, width, height))
+                WHERE table_id = ? AND height = ? AND width = ?
+            ''', (table_id, height, width))
             
             result = cursor.fetchone()
             if not result or (result[0] is None and result[1] is None):
@@ -441,21 +443,22 @@ class PriceListLoader:
         
         # Single query: prioritize exact match, then closest >= match
         cursor.execute('''
-            SELECT pr.width, pr.height,
+            SELECT pr.height, pr.width,
                    CASE 
-                       WHEN pr.width = ? AND pr.height = ? THEN 0
-                       ELSE (pr.width - ?) + (pr.height - ?)
+                       WHEN pr.height = ? AND pr.width = ? THEN 0
+                       ELSE (pr.height - ?) + (pr.width - ?)
                    END as priority
             FROM products p
             JOIN prices pr ON p.table_id = pr.table_id
-            WHERE p.model = ? AND pr.width >= ? AND pr.height >= ?
-            ORDER BY priority, pr.width, pr.height
+            WHERE p.model = ? AND pr.height >= ? AND pr.width >= ?
+            ORDER BY priority, pr.height, pr.width
             LIMIT 1
-        ''', (width, height, width, height, product, width, height))
+        ''', (height, width, height, width, product, height, width))
         
         result = cursor.fetchone()
         if result:
-            return f'{result[0]}" x {result[1]}"'
+            # Return format: width x height (height after width)
+            return f'{result[1]}" x {result[0]}"'
         
         return None
     
@@ -486,11 +489,11 @@ class PriceListLoader:
         powder_coated_multiplier = table_result[3]
         wd_multiplier = table_result[4]
         
-        # Query prices using the table_id and diameter (height field for diameter-based products) - always return normal_price first, then price_with_damper
+        # Query prices using the table_id and diameter (width field stores diameter, height is NULL for diameter-based products) - always return normal_price first, then price_with_damper
         cursor.execute('''
             SELECT normal_price, price_with_damper
             FROM prices
-            WHERE table_id = ? AND width IS NULL AND height = ?
+            WHERE table_id = ? AND height IS NULL AND width = ?
         ''', (table_id, diameter))
         
         result = cursor.fetchone()
@@ -560,15 +563,15 @@ class PriceListLoader:
         
         # Single query: prioritize exact match, then closest >= match
         cursor.execute('''
-            SELECT pr.height,
+            SELECT pr.width,
                    CASE 
-                       WHEN pr.height = ? THEN 0
-                       ELSE pr.height - ?
+                       WHEN pr.width = ? THEN 0
+                       ELSE pr.width - ?
                    END as priority
             FROM products p
             JOIN prices pr ON p.table_id = pr.table_id
-            WHERE p.model = ? AND pr.width IS NULL AND pr.height >= ?
-            ORDER BY priority, pr.height
+            WHERE p.model = ? AND pr.height IS NULL AND pr.width >= ?
+            ORDER BY priority, pr.width
             LIMIT 1
         ''', (diameter, diameter, product, diameter))
         
@@ -635,7 +638,7 @@ class PriceListLoader:
         
         # First, get the maximum available dimensions
         cursor.execute('''
-            SELECT MAX(width), MAX(height)
+            SELECT MAX(height), MAX(width)
             FROM prices
             WHERE table_id = ?
         ''', (table_id,))
@@ -644,7 +647,7 @@ class PriceListLoader:
         if not max_dims or not max_dims[0] or not max_dims[1]:
             return None
         
-        max_width, max_height = max_dims
+        max_height, max_width = max_dims
         
         # Use the maximum available dimensions if adjusted dimensions exceed them
         lookup_width = min(adjusted_width_inches, max_width)
@@ -654,8 +657,8 @@ class PriceListLoader:
         cursor.execute('''
             SELECT normal_price, price_with_damper
             FROM prices
-            WHERE table_id = ? AND width = ? AND height = ?
-        ''', (table_id, lookup_width, lookup_height))
+            WHERE table_id = ? AND height = ? AND width = ?
+        ''', (table_id, lookup_height, lookup_width))
         
         result = cursor.fetchone()
         
@@ -663,18 +666,18 @@ class PriceListLoader:
         if not result or (result[0] is None and result[1] is None):
             # Try to find the closest available dimensions
             cursor.execute('''
-                SELECT width, height, normal_price, price_with_damper
+                SELECT height, width, normal_price, price_with_damper
                 FROM prices
-                WHERE table_id = ? AND width <= ? AND height <= ?
-                ORDER BY width DESC, height DESC
+                WHERE table_id = ? AND height <= ? AND width <= ?
+                ORDER BY height DESC, width DESC
                 LIMIT 1
-            ''', (table_id, lookup_width, lookup_height))
+            ''', (table_id, lookup_height, lookup_width))
             
             result = cursor.fetchone()
             
             if result:
-                lookup_width = result[0]
-                lookup_height = result[1]
+                lookup_height = result[0]
+                lookup_width = result[1]
                 # Extract prices from the result
                 normal_price = result[2]
                 price_with_damper = result[3]

@@ -1085,8 +1085,8 @@ class QuotationApp(QMainWindow):
             width = self.width_spin.value()
             height = self.height_spin.value()
             
-            # Validate dimensions: width should not be greater than height
-            if width > height:
+            # Validate dimensions: width should be greater than height
+            if height > width:
                 self.unit_price_label.setText('Invalid')
                 self.total_price_label.setText('฿ 0.00')
                 self.rounded_size_label.setText('Invalid')
@@ -1113,13 +1113,13 @@ class QuotationApp(QMainWindow):
                     self.rounded_size_label.setText('N/A')
                     return
                 else:
-                    # Display the original size for exceeded dimensions
+                    # Display the original size for exceeded dimensions (width x height format)
                     self.rounded_size_label.setText(f'{width_inches}" x {height_inches}"')
             else:
-                # Display the rounded size
+                # Display the rounded size (already in width x height format)
                 self.rounded_size_label.setText(rounded_size)
                 
-                # Get price using the rounded size
+                # Get price using the rounded size (format: width x height)
                 unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
         
         # Apply discount
@@ -1237,10 +1237,10 @@ class QuotationApp(QMainWindow):
             width = self.width_spin.value()
             height = self.height_spin.value()
             
-            # Validate dimensions: width should not be greater than height
-            if width > height:
+            # Validate dimensions: width should be greater than height
+            if height > width:
                 QMessageBox.warning(self, 'Invalid Dimensions', 
-                                  'Width cannot be greater than height. Please adjust the dimensions.')
+                                  'Width must be greater than height. Please adjust the dimensions.')
                 return
             
             # Convert to inches if needed

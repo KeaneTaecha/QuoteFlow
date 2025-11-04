@@ -72,19 +72,19 @@ class ExcelToSQLiteConverter:
             CREATE TABLE IF NOT EXISTS prices (
                 price_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 table_id INTEGER NOT NULL,
-                width INTEGER,
                 height INTEGER,
+                width INTEGER,
                 normal_price REAL,
                 price_with_damper REAL,
                 FOREIGN KEY (table_id) REFERENCES products(table_id) ON UPDATE CASCADE,
-                UNIQUE(table_id, width, height)
+                UNIQUE(table_id, height, width)
             )
         ''')
         
         # Indexes for fast lookups
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_price_lookup 
-            ON prices(table_id, width, height)
+            ON prices(table_id, height, width)
         ''')
         
         cursor.execute('''
@@ -92,26 +92,26 @@ class ExcelToSQLiteConverter:
             ON products(model)
         ''')
         
-        # Row multipliers table for individual height row multipliers (regular and WD)
+        # Row multipliers table for individual width row multipliers (regular and WD)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS row_multipliers (
-                table_id INTEGER NOT NULL,
-                height INTEGER NOT NULL,
-                width_exceeded_multiplier REAL,
-                width_exceeded_multiplier_wd REAL,
-                PRIMARY KEY (table_id, height),
-                FOREIGN KEY (table_id) REFERENCES products(table_id) ON UPDATE CASCADE
-            )
-        ''')
-        
-        # Column multipliers table for individual width column multipliers (regular and WD)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS column_multipliers (
                 table_id INTEGER NOT NULL,
                 width INTEGER NOT NULL,
                 height_exceeded_multiplier REAL,
                 height_exceeded_multiplier_wd REAL,
                 PRIMARY KEY (table_id, width),
+                FOREIGN KEY (table_id) REFERENCES products(table_id) ON UPDATE CASCADE
+            )
+        ''')
+        
+        # Column multipliers table for individual height column multipliers (regular and WD)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS column_multipliers (
+                table_id INTEGER NOT NULL,
+                height INTEGER NOT NULL,
+                width_exceeded_multiplier REAL,
+                width_exceeded_multiplier_wd REAL,
+                PRIMARY KEY (table_id, height),
                 FOREIGN KEY (table_id) REFERENCES products(table_id) ON UPDATE CASCADE
             )
         ''')

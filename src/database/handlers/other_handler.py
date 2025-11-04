@@ -94,21 +94,21 @@ class OtherTableHandler:
         next_row_value = sheet.cell(table_loc.width_row + 1, table_loc.start_col).value
         is_separated = not self.is_inch_value(next_row_value)
         
-        # Get width cell
+        # Get height cell (from header row)
         for col in range(table_loc.height_col, table_loc.end_col + 1):
             # Check if column header contains valid keywords
             column_header = sheet.cell(table_loc.start_row, col).value
             if not self._is_valid_price_column(column_header):
                 continue
                 
-            width = None
+            height = None
             
-            # Get height cell - use appropriate step based on separation
+            # Get width cell (from first column) - use appropriate step based on separation
             step = 2 if is_separated else 1
             end_row = table_loc.end_row + 1 if not is_separated else table_loc.end_row
             for row in range(table_loc.width_row, end_row, step):
-                height = self.is_inch_value(sheet.cell(row, table_loc.start_col).value)
-                if height is None:
+                width = self.is_inch_value(sheet.cell(row, table_loc.start_col).value)
+                if width is None:
                     continue
                 
                 # Get prices
@@ -130,9 +130,9 @@ class OtherTableHandler:
                     if normal_price is not None or damper_price is not None:
                         cursor.execute('''
                             INSERT OR REPLACE INTO prices 
-                            (table_id, width, height, normal_price, price_with_damper)
+                            (table_id, height, width, normal_price, price_with_damper)
                             VALUES (?, ?, ?, ?, ?)
-                        ''', (table_id, None, height, normal_price, damper_price))
+                        ''', (table_id, None, width, normal_price, damper_price))
                         price_count += 1
                 except Exception:
                     continue
