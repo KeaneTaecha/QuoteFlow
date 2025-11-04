@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QComboBox, QSpinBox, QPushButton,
                              QTableWidget, QTableWidgetItem, QGroupBox, QCheckBox,
                              QLineEdit, QMessageBox, QFileDialog, QHeaderView,
-                             QGridLayout, QTextEdit, QDateEdit, QTabWidget, QListWidget)
+                             QGridLayout, QTextEdit, QDateEdit, QTabWidget, QListWidget, QSpacerItem, QSizePolicy)
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont, QColor, QIcon
 
@@ -26,6 +26,8 @@ class QuotationApp(QMainWindow):
         self.quote_items = []
         self.price_loader = None
         self.excel_exporter = ExcelQuotationExporter()
+        self.font_size_multiplier = 1.0  # Default font size multiplier
+        self.original_fonts = {}  # Store original font sizes for widgets
         self.init_ui()
         self.load_price_list()
     
@@ -43,11 +45,110 @@ class QuotationApp(QMainWindow):
         main_layout = QVBoxLayout()
         main_widget.setLayout(main_layout)
         
-        # Title
+        # Title bar with text size control
+        title_bar = QHBoxLayout()
         title = QLabel('ระบบจัดการใบเสนอราคา / QUOTATION MANAGEMENT SYSTEM')
         title.setFont(QFont('Arial', 16, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(title)
+        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        title_bar.addWidget(title)
+        
+        # Add stretch to push adjuster to the right
+        title_bar.addStretch()
+        
+        # Text size adjustment controls (smaller)
+        text_size_container = QWidget()
+        text_size_layout = QHBoxLayout()
+        text_size_layout.setContentsMargins(0, 0, 0, 0)
+        text_size_layout.setSpacing(0)
+        
+        # Decrease button (-)
+        self.text_size_decrease_button = QPushButton('−')
+        self.text_size_decrease_button.setToolTip('Decrease text size')
+        self.text_size_decrease_button.setStyleSheet('''
+            QPushButton {
+                background-color: #7B68EE;
+                color: white;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 4px 8px;
+                border-top-left-radius: 4px;
+                border-bottom-left-radius: 4px;
+                border-top-right-radius: 0px;
+                border-bottom-right-radius: 0px;
+                border: 1px solid #6A5ACD;
+                min-width: 28px;
+                max-width: 28px;
+            }
+            QPushButton:hover {
+                background-color: #6A5ACD;
+            }
+            QPushButton:pressed {
+                background-color: #5A4FCF;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
+            }
+        ''')
+        self.text_size_decrease_button.clicked.connect(self.decrease_text_size)
+        text_size_layout.addWidget(self.text_size_decrease_button)
+        
+        # Size label showing current percentage
+        self.text_size_label = QLabel('100%')
+        self.text_size_label.setToolTip('Current text size')
+        self.text_size_label.setAlignment(Qt.AlignCenter)
+        self.text_size_label.setStyleSheet('''
+            QLabel {
+                background-color: #7B68EE;
+                color: white;
+                font-weight: bold;
+                font-size: 10px;
+                padding: 4px 6px;
+                border: none;
+                min-width: 35px;
+                max-width: 35px;
+            }
+        ''')
+        text_size_layout.addWidget(self.text_size_label)
+        
+        # Increase button (+)
+        self.text_size_increase_button = QPushButton('+')
+        self.text_size_increase_button.setToolTip('Increase text size')
+        self.text_size_increase_button.setStyleSheet('''
+            QPushButton {
+                background-color: #7B68EE;
+                color: white;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 4px 8px;
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
+                border-top-right-radius: 4px;
+                border-bottom-right-radius: 4px;
+                border: 1px solid #6A5ACD;
+                min-width: 28px;
+                max-width: 28px;
+            }
+            QPushButton:hover {
+                background-color: #6A5ACD;
+            }
+            QPushButton:pressed {
+                background-color: #5A4FCF;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
+            }
+        ''')
+        self.text_size_increase_button.clicked.connect(self.increase_text_size)
+        text_size_layout.addWidget(self.text_size_increase_button)
+        
+        text_size_container.setLayout(text_size_layout)
+        title_bar.addWidget(text_size_container)
+        
+        title_widget = QWidget()
+        title_widget.setLayout(title_bar)
+        main_layout.addWidget(title_widget)
         
         # Create tab widget for better organization
         self.tabs = QTabWidget()
@@ -59,8 +160,8 @@ class QuotationApp(QMainWindow):
         main_tab.setLayout(main_tab_layout)
         
         main_tab_layout.addWidget(self.create_quote_info_section())
-        main_tab_layout.addWidget(self.create_product_selection_section())
         main_tab_layout.addWidget(self.create_title_section())
+        main_tab_layout.addWidget(self.create_product_selection_section())
         main_tab_layout.addWidget(self.create_items_table_section())
         
         self.tabs.addTab(main_tab, "ใบเสนอราคา / Quotation")
@@ -84,6 +185,10 @@ class QuotationApp(QMainWindow):
         self.product_dropdown.setAttribute(Qt.WA_ShowWithoutActivating)
         
         self.statusBar().showMessage('Ready')
+        
+        # Store original fonts and apply initial font size
+        self.store_original_fonts()
+        self.update_text_size_controls()
     
     def set_window_icon(self):
         """Set the window icon for the application"""
@@ -107,25 +212,33 @@ class QuotationApp(QMainWindow):
         layout.addWidget(QLabel('ถึง / TO:'), 0, 0)
         self.to_input = QLineEdit()
         self.to_input.setPlaceholderText('ชื่อผู้รับ / Recipient Name')
-        layout.addWidget(self.to_input, 0, 1, 1, 2)
+        layout.addWidget(self.to_input, 0, 1, 1, 3)  # Span to column 3 to match Fax input end
         
-        layout.addWidget(QLabel('เลขที่ / NO.:'), 0, 3)
+        # Add horizontal spacer to push the next group to the right (only in this row)
+        spacer1 = QSpacerItem(20, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        layout.addItem(spacer1, 0, 4)
+        
+        layout.addWidget(QLabel('เลขที่ / NO.:'), 0, 5)
         self.quote_number = QLineEdit()
         self.quote_number.setText(f"{datetime.now().strftime('%y-%m')}{datetime.now().day:03d}")
-        layout.addWidget(self.quote_number, 0, 4)
+        layout.addWidget(self.quote_number, 0, 6)
         
         # Row 2: Company and Date
         layout.addWidget(QLabel('บริษัท / COMPANY:'), 1, 0)
         self.company_input = QLineEdit()
         self.company_input.setPlaceholderText('ชื่อบริษัท / Company Name')
-        layout.addWidget(self.company_input, 1, 1, 1, 2)
+        layout.addWidget(self.company_input, 1, 1, 1, 3)  # Span to column 3 to match Fax input end
         
-        layout.addWidget(QLabel('วันที่ / DATE:'), 1, 3)
+        # Add horizontal spacer to push the next group to the right (only in this row)
+        spacer2 = QSpacerItem(20, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        layout.addItem(spacer2, 1, 4)
+        
+        layout.addWidget(QLabel('วันที่ / DATE:'), 1, 5)
         self.quote_date = QDateEdit()
         self.quote_date.setDate(QDate.currentDate())
         self.quote_date.setCalendarPopup(True)
         self.quote_date.setDisplayFormat('yyyy-MM-dd')
-        layout.addWidget(self.quote_date, 1, 4)
+        layout.addWidget(self.quote_date, 1, 6)
         
         # Row 3: Tel, Fax, and Project
         layout.addWidget(QLabel('โทร / TEL:'), 2, 0)
@@ -136,17 +249,24 @@ class QuotationApp(QMainWindow):
         layout.addWidget(QLabel('Fax:'), 2, 2)
         self.fax_input = QLineEdit()
         self.fax_input.setPlaceholderText('เบอร์แฟกซ์ / Fax Number')
+        self.fax_input.setMaximumWidth(150)  # Limit the width to fit in the same row
         layout.addWidget(self.fax_input, 2, 3)
         
-        layout.addWidget(QLabel('งาน / PROJECT:'), 2, 4)
+        # Add horizontal spacer to push the next group to the right (only in this row)
+        spacer3 = QSpacerItem(20, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        layout.addItem(spacer3, 2, 4)
+        
+        layout.addWidget(QLabel('งาน / PROJECT:'), 2, 5)
         self.project_input = QLineEdit()
         self.project_input.setPlaceholderText('ชื่อโครงการ / Project Name')
-        layout.addWidget(self.project_input, 2, 5)
+        layout.addWidget(self.project_input, 2, 6)
         
-        # Set column stretch
-        layout.setColumnStretch(1, 2)
-        layout.setColumnStretch(3, 1)
-        layout.setColumnStretch(5, 2)
+        # Set column stretch only for input columns within rows
+        layout.setColumnStretch(1, 2)  # TO/Company/Tel input area (spans columns 1-3)
+        layout.setColumnStretch(6, 2)  # Quote number/Date/Project input area
+        # Don't stretch column 3 (Fax input end) or column 5 (label column) globally
+        # Set minimum width for label column to prevent excessive spacing
+        layout.setColumnMinimumWidth(5, 0)  # Label column (all three labels in same column)
         
         group.setLayout(layout)
         return group
@@ -1221,6 +1341,14 @@ class QuotationApp(QMainWindow):
         grand_total = 0
         item_counter = 1
         
+        # Get base font size (use stored original if available, otherwise use default)
+        table_id = id(self.items_table)
+        if table_id in self.original_fonts:
+            base_font_size = self.original_fonts[table_id]['font'].pointSize()
+        else:
+            base_font_size = 9  # Default font size
+        adjusted_font_size = max(1, int(base_font_size * self.font_size_multiplier))
+        
         for row, item in enumerate(self.quote_items):
             if item.get('is_title', False):
                 # Title row - no ID number, show title in product column
@@ -1238,11 +1366,12 @@ class QuotationApp(QMainWindow):
                     cell = self.items_table.item(row, col)
                     if cell:
                         cell.setBackground(QColor(240, 240, 240))  # Light gray background
-                        # Make title text bold
+                        # Make title text bold and apply font size
+                        font = cell.font()
+                        font.setPointSize(adjusted_font_size)
                         if col == 1:  # Product column where title is displayed
-                            font = cell.font()
                             font.setBold(True)
-                            cell.setFont(font)
+                        cell.setFont(font)
             else:
                 # Regular product row
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
@@ -1263,6 +1392,14 @@ class QuotationApp(QMainWindow):
                 
                 # Show total (after discount)
                 self.items_table.setItem(row, 7, QTableWidgetItem(f"฿ {item['total']:,.2f}"))
+                
+                # Apply font size to all cells in this row
+                for col in range(8):
+                    cell = self.items_table.item(row, col)
+                    if cell:
+                        font = cell.font()
+                        font.setPointSize(adjusted_font_size)
+                        cell.setFont(font)
                 
                 grand_total += item['total']
                 item_counter += 1
@@ -1305,5 +1442,115 @@ class QuotationApp(QMainWindow):
         self.quote_number.setText(f"{datetime.now().strftime('%y-%m')}{datetime.now().day:03d}")
         self.refresh_items_table()
         self.statusBar().showMessage('New quote started')
+    
+    def store_original_fonts(self):
+        """Store original font sizes for all widgets"""
+        # Find all widgets recursively
+        all_widgets = self.findChildren(QWidget)
+        
+        for widget in all_widgets:
+            widget_id = id(widget)
+            if widget_id not in self.original_fonts:
+                # Get current font
+                current_font = widget.font()
+                self.original_fonts[widget_id] = {
+                    'font': QFont(current_font),  # Create a copy
+                    'widget': widget
+                }
+        
+        # Also store fonts for special widgets
+        if hasattr(self, 'statusBar'):
+            widget_id = id(self.statusBar())
+            if widget_id not in self.original_fonts:
+                status_font = self.statusBar().font()
+                self.original_fonts[widget_id] = {
+                    'font': QFont(status_font),
+                    'widget': self.statusBar()
+                }
+    
+    def apply_font_size(self, multiplier):
+        """Apply font size multiplier to all widgets"""
+        # Re-store fonts to catch any newly created widgets
+        self.store_original_fonts()
+        
+        # Find all widgets and apply font size
+        all_widgets = self.findChildren(QWidget)
+        
+        for widget in all_widgets:
+            widget_id = id(widget)
+            if widget_id in self.original_fonts:
+                original_font = self.original_fonts[widget_id]['font']
+                new_size = max(1, int(original_font.pointSize() * multiplier))
+                new_font = QFont(original_font)
+                new_font.setPointSize(new_size)
+                widget.setFont(new_font)
+        
+        # Update status bar
+        if hasattr(self, 'statusBar'):
+            status_bar_id = id(self.statusBar())
+            if status_bar_id in self.original_fonts:
+                original_font = self.original_fonts[status_bar_id]['font']
+                new_status_size = max(1, int(original_font.pointSize() * multiplier))
+                new_font = QFont(original_font)
+                new_font.setPointSize(new_status_size)
+                self.statusBar().setFont(new_font)
+        
+        # Update table headers and items if table exists
+        if hasattr(self, 'items_table'):
+            header = self.items_table.horizontalHeader()
+            header_font = header.font()
+            new_header_size = max(1, int(header_font.pointSize() * multiplier))
+            header_font.setPointSize(new_header_size)
+            header.setFont(header_font)
+            
+            # Update font for existing table items
+            for row in range(self.items_table.rowCount()):
+                for col in range(self.items_table.columnCount()):
+                    item = self.items_table.item(row, col)
+                    if item:
+                        item_font = item.font()
+                        new_item_size = max(1, int(item_font.pointSize() * multiplier))
+                        item_font.setPointSize(new_item_size)
+                        item.setFont(item_font)
+    
+    def increase_text_size(self):
+        """Increase text size by 10%"""
+        min_size = 0.5  # Minimum 50%
+        max_size = 2.0  # Maximum 200%
+        step = 0.1  # 10% increments
+        
+        new_multiplier = min(max_size, self.font_size_multiplier + step)
+        
+        if new_multiplier != self.font_size_multiplier:
+            self.font_size_multiplier = new_multiplier
+            self.apply_font_size(new_multiplier)
+            self.update_text_size_controls()
+            self.statusBar().showMessage(f'Text size increased to {new_multiplier:.0%}', 2000)
+    
+    def decrease_text_size(self):
+        """Decrease text size by 10%"""
+        min_size = 0.5  # Minimum 50%
+        max_size = 2.0  # Maximum 200%
+        step = 0.1  # 10% increments
+        
+        new_multiplier = max(min_size, self.font_size_multiplier - step)
+        
+        if new_multiplier != self.font_size_multiplier:
+            self.font_size_multiplier = new_multiplier
+            self.apply_font_size(new_multiplier)
+            self.update_text_size_controls()
+            self.statusBar().showMessage(f'Text size decreased to {new_multiplier:.0%}', 2000)
+    
+    def update_text_size_controls(self):
+        """Update the text size label and enable/disable buttons based on limits"""
+        # Update label
+        self.text_size_label.setText(f'{int(self.font_size_multiplier * 100)}%')
+        
+        # Enable/disable buttons based on limits
+        min_size = 0.5
+        max_size = 2.0
+        
+        self.text_size_decrease_button.setEnabled(self.font_size_multiplier > min_size)
+        self.text_size_increase_button.setEnabled(self.font_size_multiplier < max_size)
     
     
