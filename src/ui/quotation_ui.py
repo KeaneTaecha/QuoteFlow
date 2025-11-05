@@ -329,7 +329,10 @@ class QuotationApp(QMainWindow):
     def create_product_selection_section(self):
         """Create the product selection panel"""
         group = QGroupBox('Product Selection')
-        layout = QHBoxLayout()
+        main_layout = QVBoxLayout()  # Main vertical layout
+        
+        # First row: Product Type, Finish, Unit, Width, Height, Quantity, Discount, etc.
+        first_row = QHBoxLayout()
         
         # Product Type
         prod_layout = QVBoxLayout()
@@ -341,6 +344,7 @@ class QuotationApp(QMainWindow):
         self.product_input.focusOutEvent = self.on_product_input_focus_out
         self.product_input.keyPressEvent = self.on_product_input_key_press
         prod_layout.addWidget(self.product_input)
+        first_row.addLayout(prod_layout)
         
         # Dropdown list for matching products - positioned absolutely to float over content
         self.product_dropdown = QListWidget()
@@ -365,7 +369,6 @@ class QuotationApp(QMainWindow):
                 color: white;
             }
         """)
-        layout.addLayout(prod_layout)
         
         # Finish
         finish_layout = QVBoxLayout()
@@ -374,7 +377,7 @@ class QuotationApp(QMainWindow):
         # Finish options will be populated dynamically based on selected product
         self.finish_combo.currentTextChanged.connect(self.on_selection_changed)
         finish_layout.addWidget(self.finish_combo)
-        layout.addLayout(finish_layout)
+        first_row.addLayout(finish_layout)
         
         # Powder Coating Color (initially hidden)
         self.powder_color_layout = QVBoxLayout()
@@ -392,7 +395,7 @@ class QuotationApp(QMainWindow):
         ])
         self.powder_color_combo.currentTextChanged.connect(self.on_selection_changed)
         self.powder_color_layout.addWidget(self.powder_color_combo)
-        layout.addLayout(self.powder_color_layout)
+        first_row.addLayout(self.powder_color_layout)
         
         # Initially hide powder color selection
         self.show_hide_widgets(self.powder_color_layout, False)
@@ -405,7 +408,7 @@ class QuotationApp(QMainWindow):
         self.special_color_input.setPlaceholderText('e.g., Custom Blue, RAL 5005, etc.')
         self.special_color_input.textChanged.connect(self.on_selection_changed)
         self.special_color_layout.addWidget(self.special_color_input)
-        layout.addLayout(self.special_color_layout)
+        first_row.addLayout(self.special_color_layout)
         
         # Special Color Multiplier (initially hidden)
         self.special_color_multiplier_layout = QVBoxLayout()
@@ -418,7 +421,7 @@ class QuotationApp(QMainWindow):
         self.special_color_multiplier_spin.setSuffix('%')
         self.special_color_multiplier_spin.valueChanged.connect(self.on_selection_changed)
         self.special_color_multiplier_layout.addWidget(self.special_color_multiplier_spin)
-        layout.addLayout(self.special_color_multiplier_layout)
+        first_row.addLayout(self.special_color_multiplier_layout)
         
         # Initially hide special color inputs
         self.show_hide_widgets(self.special_color_layout, False)
@@ -431,7 +434,7 @@ class QuotationApp(QMainWindow):
         self.unit_combo.addItems(['Inches', 'Millimeters'])
         self.unit_combo.currentTextChanged.connect(self.on_unit_changed)
         unit_layout.addWidget(self.unit_combo)
-        layout.addLayout(unit_layout)
+        first_row.addLayout(unit_layout)
         
         # Width
         self.width_layout = QVBoxLayout()
@@ -443,7 +446,7 @@ class QuotationApp(QMainWindow):
         self.width_spin.setValue(4)
         self.width_spin.valueChanged.connect(self.update_price_display)
         self.width_layout.addWidget(self.width_spin)
-        layout.addLayout(self.width_layout)
+        first_row.addLayout(self.width_layout)
         
         # Height
         self.height_layout = QVBoxLayout()
@@ -455,7 +458,7 @@ class QuotationApp(QMainWindow):
         self.height_spin.setValue(4)
         self.height_spin.valueChanged.connect(self.update_price_display)
         self.height_layout.addWidget(self.height_spin)
-        layout.addLayout(self.height_layout)
+        first_row.addLayout(self.height_layout)
         
         # Other Table Size (initially hidden)
         self.other_table_layout = QVBoxLayout()
@@ -467,7 +470,7 @@ class QuotationApp(QMainWindow):
         self.other_table_spin.setValue(4)
         self.other_table_spin.valueChanged.connect(self.update_price_display)
         self.other_table_layout.addWidget(self.other_table_spin)
-        layout.addLayout(self.other_table_layout)
+        first_row.addLayout(self.other_table_layout)
         
         # Initially hide other table layout
         self.show_hide_widgets(self.other_table_layout, False)
@@ -481,7 +484,7 @@ class QuotationApp(QMainWindow):
         self.quantity_spin.setValue(1)
         self.quantity_spin.valueChanged.connect(self.update_price_display)
         qty_layout.addWidget(self.quantity_spin)
-        layout.addLayout(qty_layout)
+        first_row.addLayout(qty_layout)
         
         # Discount
         discount_layout = QVBoxLayout()
@@ -493,7 +496,7 @@ class QuotationApp(QMainWindow):
         self.discount_spin.setSuffix('%')
         self.discount_spin.valueChanged.connect(self.update_price_display)
         discount_layout.addWidget(self.discount_spin)
-        layout.addLayout(discount_layout)
+        first_row.addLayout(discount_layout)
         
         # Unit Price Display
         price_layout = QVBoxLayout()
@@ -503,7 +506,7 @@ class QuotationApp(QMainWindow):
         self.unit_price_label.setStyleSheet('color: #2E7D32; padding: 5px;')
         self.unit_price_label.setMinimumWidth(120)  # Fixed width to prevent shifting
         price_layout.addWidget(self.unit_price_label)
-        layout.addLayout(price_layout)
+        first_row.addLayout(price_layout)
         
         # Rounded Size Display
         rounded_size_layout = QVBoxLayout()
@@ -513,7 +516,7 @@ class QuotationApp(QMainWindow):
         self.rounded_size_label.setStyleSheet('color: #FF5722; padding: 5px;')
         self.rounded_size_label.setMinimumWidth(120)  # Fixed width to prevent shifting
         rounded_size_layout.addWidget(self.rounded_size_label)
-        layout.addLayout(rounded_size_layout)
+        first_row.addLayout(rounded_size_layout)
         
         # Total Price Display
         total_layout = QVBoxLayout()
@@ -523,7 +526,7 @@ class QuotationApp(QMainWindow):
         self.total_price_label.setStyleSheet('color: #1565C0; padding: 5px;')
         self.total_price_label.setMinimumWidth(120)  # Fixed width to prevent shifting
         total_layout.addWidget(self.total_price_label)
-        layout.addLayout(total_layout)
+        first_row.addLayout(total_layout)
         
         # Add Button
         add_layout = QVBoxLayout()
@@ -532,9 +535,25 @@ class QuotationApp(QMainWindow):
         self.add_button.setStyleSheet('background-color: #4CAF50; color: white; padding: 10px; font-weight: bold;')
         self.add_button.clicked.connect(self.add_item_to_quote)
         add_layout.addWidget(self.add_button)
-        layout.addLayout(add_layout)
+        first_row.addLayout(add_layout)
         
-        group.setLayout(layout)
+        # Add first row to main layout
+        main_layout.addLayout(first_row)
+        
+        # Second row: Detail (on its own row)
+        second_row = QHBoxLayout()
+        detail_layout = QVBoxLayout()
+        detail_layout.addWidget(QLabel('Detail:'))
+        self.detail_input = QLineEdit()
+        self.detail_input.setPlaceholderText('Enter detail for Excel export...')
+        detail_layout.addWidget(self.detail_input)
+        second_row.addLayout(detail_layout)
+        second_row.addStretch()  # Push detail to the left
+        
+        # Add second row to main layout
+        main_layout.addLayout(second_row)
+        
+        group.setLayout(main_layout)
         
         # Store reference to product input for dropdown positioning
         self.product_input_widget = self.product_input
@@ -585,9 +604,9 @@ class QuotationApp(QMainWindow):
         
         # Table
         self.items_table = QTableWidget()
-        self.items_table.setColumnCount(8)
+        self.items_table.setColumnCount(9)
         self.items_table.setHorizontalHeaderLabels([
-            'Item', 'Product', 'Finish', 'Size', 'Qty', 'Unit Price', 'Discount', 'Total'
+            'Item', 'Product', 'Detail', 'Finish', 'Size', 'Qty', 'Unit Price', 'Discount', 'Total'
         ])
         
         # Set column widths
@@ -595,11 +614,12 @@ class QuotationApp(QMainWindow):
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
         
         # Connect selection change to update move button states
         self.items_table.itemSelectionChanged.connect(self.update_move_button_states)
@@ -1284,7 +1304,8 @@ class QuotationApp(QMainWindow):
                 'discount': discount / 100,  # Store as decimal (0.1 for 10%)
                 'discounted_unit_price': discounted_unit_price,  # Price after discount
                 'total': total_price,
-                'rounded_size': rounded_size  # Rounded size for pricing
+                'rounded_size': rounded_size,  # Rounded size for pricing
+                'detail': self.detail_input.text().strip()  # Detail for Excel column D
             }
         else:
             # Handle width/height-based products
@@ -1349,7 +1370,8 @@ class QuotationApp(QMainWindow):
                 'discount': discount / 100,  # Store as decimal (0.1 for 10%)
                 'discounted_unit_price': discounted_unit_price,  # Price after discount
                 'total': total_price,
-                'rounded_size': rounded_size  # Rounded size for pricing
+                'rounded_size': rounded_size,  # Rounded size for pricing
+                'detail': self.detail_input.text().strip()  # Detail for Excel column D
             }
         
         self.quote_items.append(item)
@@ -1377,7 +1399,8 @@ class QuotationApp(QMainWindow):
             'discount': 0,
             'discounted_unit_price': 0,
             'total': 0,
-            'rounded_size': None
+            'rounded_size': None,
+            'detail': ''  # No detail for titles
         }
         
         self.quote_items.append(item)
@@ -1406,15 +1429,16 @@ class QuotationApp(QMainWindow):
                 # Title row - no ID number, show title in product column
                 self.items_table.setItem(row, 0, QTableWidgetItem(''))  # No ID for titles
                 self.items_table.setItem(row, 1, QTableWidgetItem(item['title']))
-                self.items_table.setItem(row, 2, QTableWidgetItem(''))  # No finish
-                self.items_table.setItem(row, 3, QTableWidgetItem(''))  # No size
-                self.items_table.setItem(row, 4, QTableWidgetItem(''))  # No quantity
-                self.items_table.setItem(row, 5, QTableWidgetItem(''))  # No unit price
-                self.items_table.setItem(row, 6, QTableWidgetItem(''))  # No discount
-                self.items_table.setItem(row, 7, QTableWidgetItem(''))  # No total
+                self.items_table.setItem(row, 2, QTableWidgetItem(''))  # No detail for titles
+                self.items_table.setItem(row, 3, QTableWidgetItem(''))  # No finish
+                self.items_table.setItem(row, 4, QTableWidgetItem(''))  # No size
+                self.items_table.setItem(row, 5, QTableWidgetItem(''))  # No quantity
+                self.items_table.setItem(row, 6, QTableWidgetItem(''))  # No unit price
+                self.items_table.setItem(row, 7, QTableWidgetItem(''))  # No discount
+                self.items_table.setItem(row, 8, QTableWidgetItem(''))  # No total
                 
                 # Style the title row differently
-                for col in range(8):
+                for col in range(9):
                     cell = self.items_table.item(row, col)
                     if cell:
                         cell.setBackground(QColor(240, 240, 240))  # Light gray background
@@ -1428,25 +1452,26 @@ class QuotationApp(QMainWindow):
                 # Regular product row
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
                 self.items_table.setItem(row, 1, QTableWidgetItem(item['product_code']))
-                self.items_table.setItem(row, 2, QTableWidgetItem(item['finish']))
-                self.items_table.setItem(row, 3, QTableWidgetItem(item['size']))
-                self.items_table.setItem(row, 4, QTableWidgetItem(str(item['quantity'])))
+                self.items_table.setItem(row, 2, QTableWidgetItem(item.get('detail', '')))  # Detail column
+                self.items_table.setItem(row, 3, QTableWidgetItem(item['finish']))
+                self.items_table.setItem(row, 4, QTableWidgetItem(item['size']))
+                self.items_table.setItem(row, 5, QTableWidgetItem(str(item['quantity'])))
                 
                 # Show original unit price
-                self.items_table.setItem(row, 5, QTableWidgetItem(f"฿ {item['unit_price']:,.2f}"))
+                self.items_table.setItem(row, 6, QTableWidgetItem(f"฿ {item['unit_price']:,.2f}"))
                 
                 # Show discount percentage
                 discount_percent = item.get('discount', 0) * 100
                 if discount_percent > 0:
-                    self.items_table.setItem(row, 6, QTableWidgetItem(f"{discount_percent:.0f}%"))
+                    self.items_table.setItem(row, 7, QTableWidgetItem(f"{discount_percent:.0f}%"))
                 else:
-                    self.items_table.setItem(row, 6, QTableWidgetItem("0%"))
+                    self.items_table.setItem(row, 7, QTableWidgetItem("0%"))
                 
                 # Show total (after discount)
-                self.items_table.setItem(row, 7, QTableWidgetItem(f"฿ {item['total']:,.2f}"))
+                self.items_table.setItem(row, 8, QTableWidgetItem(f"฿ {item['total']:,.2f}"))
                 
                 # Apply font size to all cells in this row
-                for col in range(8):
+                for col in range(9):
                     cell = self.items_table.item(row, col)
                     if cell:
                         font = cell.font()
@@ -1535,6 +1560,7 @@ class QuotationApp(QMainWindow):
         self.tel_input.clear()
         self.fax_input.clear()
         self.project_input.clear()
+        self.detail_input.clear()
         self.quote_number.setText(f"{datetime.now().strftime('%y-%m')}{datetime.now().day:03d}")
         self.refresh_items_table()
         self.statusBar().showMessage('New quote started')

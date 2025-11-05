@@ -180,7 +180,8 @@ class ExcelQuotationExporter:
                 self._safe_set_cell_value(f'A{current_row}', '', normal_font, center_alignment)
                 self._safe_set_cell_value(f'B{current_row}', item.get('title', ''), title_font, left_alignment)
                 
-                # Clear other columns for title
+                # Clear other columns for title (including column D)
+                self._safe_set_cell_value(f'D{current_row}', '', normal_font, left_alignment)
                 self._safe_set_cell_value(f'G{current_row}', '', normal_font, center_alignment)
                 self._safe_set_cell_value(f'H{current_row}', '', normal_font, center_alignment)
                 self._safe_set_cell_value(f'I{current_row}', '', normal_font, center_alignment)
@@ -196,6 +197,10 @@ class ExcelQuotationExporter:
                 
                 # MODEL in column B (NO MERGING!)
                 self._safe_set_cell_value(f'B{current_row}', item.get('product_code', ''), normal_font, left_alignment)
+                
+                # DETAIL in column D
+                detail = item.get('detail', '')
+                self._safe_set_cell_value(f'D{current_row}', detail, normal_font, left_alignment)
                 
                 # FINISHING in column F - Thai text with bottom right alignment
                 finish = item.get('finish', '')
