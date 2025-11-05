@@ -601,10 +601,53 @@ class QuotationApp(QMainWindow):
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
         
+        # Connect selection change to update move button states
+        self.items_table.itemSelectionChanged.connect(self.update_move_button_states)
+        
         layout.addWidget(self.items_table)
         
         # Buttons for table operations
         button_layout = QHBoxLayout()
+        
+        self.move_up_button = QPushButton('Move Up')
+        self.move_up_button.setStyleSheet('''
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
+            }
+        ''')
+        self.move_up_button.clicked.connect(self.move_item_up)
+        button_layout.addWidget(self.move_up_button)
+        
+        self.move_down_button = QPushButton('Move Down')
+        self.move_down_button.setStyleSheet('''
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
+            }
+        ''')
+        self.move_down_button.clicked.connect(self.move_item_down)
+        button_layout.addWidget(self.move_down_button)
         
         self.remove_button = QPushButton('Remove Selected Item')
         self.remove_button.clicked.connect(self.remove_selected_item)
@@ -613,6 +656,13 @@ class QuotationApp(QMainWindow):
         self.clear_button = QPushButton('Clear All Items')
         self.clear_button.clicked.connect(self.clear_all_items)
         button_layout.addWidget(self.clear_button)
+        
+        # Set the same minimum height for all buttons to ensure they're aligned
+        button_height = 30  # Standard button height
+        self.move_up_button.setMinimumHeight(button_height)
+        self.move_down_button.setMinimumHeight(button_height)
+        self.remove_button.setMinimumHeight(button_height)
+        self.clear_button.setMinimumHeight(button_height)
         
         button_layout.addStretch()
         
@@ -625,6 +675,11 @@ class QuotationApp(QMainWindow):
         layout.addLayout(button_layout)
         
         group.setLayout(layout)
+        
+        # Initialize button states (disabled initially since no items/selection)
+        # This will be called automatically when selection changes or items are added/removed
+        # via refresh_items_table() and itemSelectionChanged signal
+        
         return group
     
     def create_action_buttons(self):
@@ -1402,6 +1457,48 @@ class QuotationApp(QMainWindow):
                 item_counter += 1
         
         self.grand_total_label.setText(f'Grand Total: ฿ {grand_total:,.2f}')
+        
+        # Update move button states based on selection
+        self.update_move_button_states()
+    
+    def update_move_button_states(self):
+        """Update the enabled state of move up/down buttons based on current selection"""
+        current_row = self.items_table.currentRow()
+        total_rows = len(self.quote_items)
+        
+        # Enable/disable move up button (disabled if first row or no selection)
+        self.move_up_button.setEnabled(current_row > 0 and current_row < total_rows)
+        
+        # Enable/disable move down button (disabled if last row or no selection)
+        self.move_down_button.setEnabled(current_row >= 0 and current_row < total_rows - 1)
+    
+    def move_item_up(self):
+        """Move the selected item up one position"""
+        current_row = self.items_table.currentRow()
+        if current_row > 0 and current_row < len(self.quote_items):
+            # Swap items
+            self.quote_items[current_row], self.quote_items[current_row - 1] = \
+                self.quote_items[current_row - 1], self.quote_items[current_row]
+            
+            # Refresh table and maintain selection on the moved item
+            self.refresh_items_table()
+            self.items_table.selectRow(current_row - 1)
+            self.update_move_button_states()
+            self.statusBar().showMessage('Item moved up')
+    
+    def move_item_down(self):
+        """Move the selected item down one position"""
+        current_row = self.items_table.currentRow()
+        if current_row >= 0 and current_row < len(self.quote_items) - 1:
+            # Swap items
+            self.quote_items[current_row], self.quote_items[current_row + 1] = \
+                self.quote_items[current_row + 1], self.quote_items[current_row]
+            
+            # Refresh table and maintain selection on the moved item
+            self.refresh_items_table()
+            self.items_table.selectRow(current_row + 1)
+            self.update_move_button_states()
+            self.statusBar().showMessage('Item moved down')
     
     def remove_selected_item(self):
         """Remove the selected item from the quote"""
@@ -1409,6 +1506,7 @@ class QuotationApp(QMainWindow):
         if current_row >= 0:
             del self.quote_items[current_row]
             self.refresh_items_table()
+            self.update_move_button_states()
             self.statusBar().showMessage('Item removed')
     
     def clear_all_items(self):
@@ -1419,6 +1517,7 @@ class QuotationApp(QMainWindow):
         if reply == QMessageBox.Yes:
             self.quote_items = []
             self.refresh_items_table()
+            self.update_move_button_states()
             self.statusBar().showMessage('All items cleared')
     
     def new_quote(self):
