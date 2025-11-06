@@ -5,17 +5,131 @@ Contains the main PyQt5 GUI for the quotation system with Excel export functiona
 
 import sys
 import os
+import re
 from datetime import datetime
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QComboBox, QSpinBox, QPushButton,
                              QTableWidget, QTableWidgetItem, QGroupBox, QCheckBox,
                              QLineEdit, QMessageBox, QFileDialog, QHeaderView,
-                             QGridLayout, QTextEdit, QDateEdit, QTabWidget, QListWidget, QSpacerItem, QSizePolicy)
+                             QGridLayout, QTextEdit, QDateEdit, QTabWidget, QListWidget, QSpacerItem, QSizePolicy,
+                             QDialog, QProgressBar, QApplication)
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont, QColor, QIcon
 
-from database.price_loader import PriceListLoader
-from excel_exporter import ExcelQuotationExporter
+from sql.price_loader import PriceListLoader
+from utils.excel_exporter import ExcelQuotationExporter
+from utils.excel_importer import ExcelItemImporter
+
+
+class ExcelUploadProgressDialog(QDialog):
+    """Dialog showing progress for Excel file upload with scrollable error display"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Uploading Excel File')
+        self.setModal(True)
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(90)  # Compact initial height
+        self.resize(600, 90)  # Set initial compact size
+        
+        layout = QVBoxLayout()
+        layout.setSpacing(5)  # Reduced spacing for tighter layout
+        
+        # Status label
+        self.status_label = QLabel('Initializing...')
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+        
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)  # Show percentage
+        layout.addWidget(self.progress_bar)
+        
+        # Scrollable error/warning area (initially hidden)
+        self.error_text = QTextEdit()
+        self.error_text.setReadOnly(True)
+        self.error_text.setPlaceholderText('No errors or warnings')
+        self.error_text.setMinimumHeight(150)
+        self.error_text.setVisible(False)
+        layout.addWidget(self.error_text)  # No stretch initially - will expand when shown
+        
+        # Close button (initially hidden)
+        self.close_button = QPushButton('Close')
+        self.close_button.setStyleSheet('''
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        ''')
+        self.close_button.clicked.connect(self.accept)
+        self.close_button.setVisible(False)
+        layout.addWidget(self.close_button)
+        
+        self.setLayout(layout)
+    
+    def update_progress(self, value, status_text=''):
+        """Update progress bar and status text"""
+        self.progress_bar.setValue(value)
+        if status_text:
+            self.status_label.setText(status_text)
+        # Force UI updates to ensure progress is visible
+        self.update()  # Update the dialog
+        QApplication.processEvents()  # Process pending events
+    
+    def show_results(self, added_count, title_count, invalid_items, warnings):
+        """Show final results with errors/warnings in scrollable area"""
+        # Hide progress bar
+        self.progress_bar.setVisible(False)
+        
+        # Update status
+        status_text = f'Upload Complete!\n\n'
+        status_text += f'✓ Successfully imported {added_count} item(s)'
+        if title_count > 0:
+            status_text += f' and {title_count} title(s)'
+        
+        if invalid_items or warnings:
+            status_text += f'\n\n⚠ {len(invalid_items)} item(s) with errors'
+            if warnings:
+                status_text += f' and {len(warnings)} warning(s)'
+        
+        self.status_label.setText(status_text)
+        
+        # Show errors/warnings if any
+        if invalid_items or warnings:
+            error_text = ''
+            
+            if invalid_items:
+                error_text += '=== ERRORS ===\n\n'
+                for idx, invalid in enumerate(invalid_items, 1):
+                    error_text += f'{idx}. Model: {invalid["model"]}\n'
+                    error_text += f'   Error: {invalid["error"]}\n\n'
+            
+            if warnings:
+                error_text += '=== WARNINGS ===\n\n'
+                for idx, warning in enumerate(warnings, 1):
+                    error_text += f'{idx}. {warning}\n\n'
+            
+            self.error_text.setText(error_text)
+            self.error_text.setVisible(True)
+            # Expand dialog to accommodate error area
+            self.setMinimumHeight(400)
+            self.resize(600, 400)
+        else:
+            # Keep compact if no errors
+            self.setMinimumHeight(130)
+            self.resize(600, 130)
+        
+        # Show close button
+        self.close_button.setVisible(True)
+        QApplication.processEvents()  # Ensure UI updates
 
 
 class QuotationApp(QMainWindow):
@@ -548,6 +662,7 @@ class QuotationApp(QMainWindow):
         self.detail_input.setPlaceholderText('Enter detail for Excel export...')
         detail_layout.addWidget(self.detail_input)
         second_row.addLayout(detail_layout)
+        
         second_row.addStretch()  # Push detail to the left
         
         # Add second row to main layout
@@ -629,6 +744,23 @@ class QuotationApp(QMainWindow):
         # Buttons for table operations
         button_layout = QHBoxLayout()
         
+        # Upload Excel button (smaller)
+        self.upload_excel_button = QPushButton('Upload Excel')
+        self.upload_excel_button.setStyleSheet('''
+            QPushButton {
+                background-color: #9C27B0;
+                color: white;
+                padding: 5px 10px;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #7B1FA2;
+            }
+        ''')
+        self.upload_excel_button.clicked.connect(self.upload_excel_file)
+        button_layout.addWidget(self.upload_excel_button)
+        
         self.move_up_button = QPushButton('Move Up')
         self.move_up_button.setStyleSheet('''
             QPushButton {
@@ -683,6 +815,7 @@ class QuotationApp(QMainWindow):
         self.move_down_button.setMinimumHeight(button_height)
         self.remove_button.setMinimumHeight(button_height)
         self.clear_button.setMinimumHeight(button_height)
+        self.upload_excel_button.setMinimumHeight(button_height)
         
         button_layout.addStretch()
         
@@ -1226,6 +1359,9 @@ class QuotationApp(QMainWindow):
         product, with_damper = self.extract_product_and_wd(product_with_wd)
         finish = self.finish_combo.currentText()
         
+        # Initialize filter_type (no filter UI, so default to None)
+        filter_type = None
+        
         # Add powder coating color to finish if Powder Coated is selected
         if finish == 'Powder Coated':
             powder_color = self.powder_color_combo.currentText()
@@ -1281,6 +1417,14 @@ class QuotationApp(QMainWindow):
                 QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
                 return
             
+            # Add filter price if filter is specified
+            if filter_type:
+                filter_price = self._get_filter_price(filter_type, size_inches)
+                if filter_price is None:
+                    QMessageBox.warning(self, 'Warning', f'Filter "{filter_type}" not found in database')
+                    return
+                unit_price += filter_price
+            
             # Apply discount
             discount_amount = unit_price * (discount / 100)
             discounted_unit_price = unit_price - discount_amount
@@ -1288,6 +1432,8 @@ class QuotationApp(QMainWindow):
             
             # Create product title - use the original product_with_wd which already has (WD) if applicable
             product_code = product_with_wd
+            if filter_type:
+                product_code = f"{product_code}+F.{filter_type}"
             
             # Store the original size entered by user with proper unit
             if unit == 'Millimeters':
@@ -1347,6 +1493,15 @@ class QuotationApp(QMainWindow):
                 QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
                 return
             
+            # Add filter price if filter is specified
+            if filter_type:
+                # Pass actual width and height to filter (filter will use max for sizing)
+                filter_price = self._get_filter_price(filter_type, max(width_inches, height_inches), width_inches, height_inches)
+                if filter_price is None:
+                    QMessageBox.warning(self, 'Warning', f'Filter "{filter_type}" not found in database')
+                    return
+                unit_price += filter_price
+            
             # Apply discount
             discount_amount = unit_price * (discount / 100)
             discounted_unit_price = unit_price - discount_amount
@@ -1354,6 +1509,8 @@ class QuotationApp(QMainWindow):
             
             # Create product title - use the original product_with_wd which already has (WD) if applicable
             product_code = product_with_wd
+            if filter_type:
+                product_code = f"{product_code}+F.{filter_type}"
             
             # Store the original size entered by user with proper unit
             if unit == 'Millimeters':
@@ -1448,6 +1605,32 @@ class QuotationApp(QMainWindow):
                         if col == 1:  # Product column where title is displayed
                             font.setBold(True)
                         cell.setFont(font)
+            elif item.get('is_invalid', False):
+                # Invalid item row - show error information
+                self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
+                product_text = item['product_code']
+                if item.get('error_message'):
+                    product_text += f" (ERROR: {item['error_message']})"
+                self.items_table.setItem(row, 1, QTableWidgetItem(product_text))
+                self.items_table.setItem(row, 2, QTableWidgetItem(item.get('detail', '')))
+                self.items_table.setItem(row, 3, QTableWidgetItem(item['finish']))
+                self.items_table.setItem(row, 4, QTableWidgetItem(item['size']))
+                self.items_table.setItem(row, 5, QTableWidgetItem(str(item['quantity'])))
+                self.items_table.setItem(row, 6, QTableWidgetItem('N/A'))
+                self.items_table.setItem(row, 7, QTableWidgetItem('N/A'))
+                self.items_table.setItem(row, 8, QTableWidgetItem('N/A'))
+                
+                # Style invalid items with red background
+                for col in range(9):
+                    cell = self.items_table.item(row, col)
+                    if cell:
+                        cell.setBackground(QColor(255, 200, 200))  # Light red background
+                        cell.setForeground(QColor(180, 0, 0))  # Dark red text
+                        font = cell.font()
+                        font.setPointSize(adjusted_font_size)
+                        cell.setFont(font)
+                
+                item_counter += 1
             else:
                 # Regular product row
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
@@ -1478,7 +1661,9 @@ class QuotationApp(QMainWindow):
                         font.setPointSize(adjusted_font_size)
                         cell.setFont(font)
                 
-                grand_total += item['total']
+                # Only add to grand total if not invalid
+                if not item.get('is_invalid', False):
+                    grand_total += item['total']
                 item_counter += 1
         
         self.grand_total_label.setText(f'Grand Total: ฿ {grand_total:,.2f}')
@@ -1675,4 +1860,211 @@ class QuotationApp(QMainWindow):
         self.text_size_decrease_button.setEnabled(self.font_size_multiplier > min_size)
         self.text_size_increase_button.setEnabled(self.font_size_multiplier < max_size)
     
+    def upload_excel_file(self):
+        """Handle Excel file upload and extract items with progress dialog"""
+        if not self.price_loader:
+            QMessageBox.warning(self, 'Warning', 'Price database not loaded. Please wait for the database to load.')
+            return
+        
+        # Open file dialog
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, 'Select Excel File', '', 'Excel Files (*.xlsx *.xls);;All Files (*)'
+        )
+        
+        if not file_name:
+            return
+        
+        # Create and show progress dialog
+        progress_dialog = ExcelUploadProgressDialog(self)
+        progress_dialog.show()
+        progress_dialog.update_progress(0, 'Opening Excel file...')
+        
+        try:
+            # Create Excel importer
+            progress_dialog.update_progress(5, 'Initializing importer...')
+            importer = ExcelItemImporter(self.price_loader, self.available_models)
+            
+            # Parse the Excel file with progress callback
+            # The parsing will take 5% to 90% of progress
+            def parse_progress_callback(percent, status):
+                # Map parser's 0-100% to our 5-90% range
+                mapped_percent = 5 + int((percent / 100) * 85)
+                progress_dialog.update_progress(mapped_percent, status)
+            
+            items = importer.parse_excel_file(file_name, progress_callback=parse_progress_callback)
+            
+            if not items:
+                progress_dialog.close()
+                QMessageBox.warning(self, 'Warning', 'No items found in the Excel file. Please check the file format.')
+                return
+            
+            # Add items to quote with progress updates (90% to 98%)
+            total_items = len(items)
+            added_count = 0
+            title_count = 0
+            invalid_items = []  # Store items with errors
+            warnings = []  # Store warnings
+            
+            progress_dialog.update_progress(90, f'Processing {total_items} item(s)...')
+            
+            for idx, item in enumerate(items):
+                # Update progress (90% to 98%)
+                # Use idx + 1 to ensure progress advances even for single item
+                if total_items > 0:
+                    progress = 90 + int(((idx + 1) / total_items) * 8)
+                    progress = min(progress, 98)  # Cap at 98% before finalization
+                else:
+                    progress = 98
+                progress_dialog.update_progress(progress, f'Processing item {idx + 1} of {total_items}...')
+                
+                if item.get('is_title', False):
+                    self.quote_items.append(item)
+                    title_count += 1
+                else:
+                    # Validate and add product item
+                    result = importer.add_item_from_excel(item)
+                    if result['success']:
+                        self.quote_items.append(result['item'])
+                        added_count += 1
+                    else:
+                        # Add as invalid item
+                        invalid_item = importer._create_invalid_item(item, result['error'])
+                        self.quote_items.append(invalid_item)
+                        invalid_items.append({
+                            'model': item.get('model', 'Unknown'),
+                            'error': result['error']
+                        })
+            
+            # Refresh the table
+            progress_dialog.update_progress(99, 'Finalizing...')
+            self.refresh_items_table()
+            
+            # Show results in dialog
+            progress_dialog.update_progress(100, 'Complete!')
+            # Process events to ensure 100% is visible before showing results
+            QApplication.processEvents()
+            progress_dialog.show_results(added_count, title_count, invalid_items, warnings)
+            
+            # Update status bar
+            self.statusBar().showMessage(f'Imported {added_count} items, {title_count} titles, {len(invalid_items)} invalid items from Excel file')
+            
+        except Exception as e:
+            progress_dialog.close()
+            QMessageBox.critical(self, 'Error', f'Failed to parse Excel file: {str(e)}')
     
+    def _get_filter_price(self, filter_type, size_inches, width_inches=None, height_inches=None):
+        """
+        Find filter product in database and get its price.
+        
+        Args:
+            filter_type: The filter type (e.g., "Nylon")
+            size_inches: The size in inches (for diameter-based filters) or max dimension
+            width_inches: Optional width in inches for dimension-based filters
+            height_inches: Optional height in inches for dimension-based filters
+            
+        Returns:
+            Filter price or None if not found
+        """
+        if not self.price_loader:
+            return None
+        
+        # Get all available models
+        all_models = self.price_loader.get_available_models()
+        
+        # Search for filter product that matches the filter type
+        filter_type_lower = filter_type.lower()
+        matching_filter = None
+        
+        # Simple matching: find any product that contains the filter type word
+        for model in all_models:
+            model_lower = model.lower()
+            if filter_type_lower in model_lower:
+                matching_filter = model
+                break
+        
+        if not matching_filter:
+            return None
+        
+        # Get available finishes for the filter
+        finishes = self.price_loader.get_available_finishes(matching_filter)
+        if not finishes:
+            return None
+        
+        # Use first available finish
+        finish = finishes[0]
+        
+        # Check if filter is diameter-based (other table) or dimension-based
+        is_other_table = self.price_loader.is_other_table(matching_filter)
+        
+        if is_other_table:
+            # For diameter-based filters, get base price directly from database
+            price = self._get_base_price_for_other_table(matching_filter, size_inches)
+            return price if price and price > 0 else None
+        else:
+            # For dimension-based filters, use actual width and height if provided
+            if width_inches is not None and height_inches is not None:
+                # Ensure width >= height (database convention)
+                filter_width = max(width_inches, height_inches)
+                filter_height = min(width_inches, height_inches)
+                price = self._get_base_price_for_default_table(matching_filter, filter_width, filter_height)
+            else:
+                # Fallback: use size_inches for both dimensions (square filter)
+                price = self._get_base_price_for_default_table(matching_filter, size_inches, size_inches)
+            return price if price and price > 0 else None
+    
+    def _get_base_price_for_other_table(self, product, diameter_inches):
+        """Get base price for other table product directly from database"""
+        conn = self.price_loader._get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('SELECT table_id FROM products WHERE model = ? LIMIT 1', (product,))
+        table_result = cursor.fetchone()
+        if not table_result:
+            return None
+        
+        table_id = table_result[0]
+        diameter_int = int(diameter_inches)
+        
+        cursor.execute('''
+            SELECT width, normal_price
+            FROM prices
+            WHERE table_id = ? AND height IS NULL AND width >= ?
+            ORDER BY width
+            LIMIT 1
+        ''', (table_id, diameter_int))
+        
+        result = cursor.fetchone()
+        return result[1] if result else None
+    
+    def _get_base_price_for_default_table(self, product, width_inches, height_inches):
+        """Get base price for default table product directly from database"""
+        conn = self.price_loader._get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('SELECT table_id FROM products WHERE model = ? LIMIT 1', (product,))
+        table_result = cursor.fetchone()
+        if not table_result:
+            return None
+        
+        table_id = table_result[0]
+        width_int = int(width_inches)
+        height_int = int(height_inches)
+        
+        cursor.execute('''
+            SELECT height, width, normal_price,
+                   CASE 
+                       WHEN height = ? AND width = ? THEN 0
+                       ELSE (height - ?) + (width - ?)
+                   END as priority
+            FROM prices
+            WHERE table_id = ? AND height >= ? AND width >= ?
+            ORDER BY priority, height, width
+            LIMIT 1
+        ''', (height_int, width_int, height_int, width_int, table_id, height_int, width_int))
+        
+        result = cursor.fetchone()
+        return result[2] if result else None
