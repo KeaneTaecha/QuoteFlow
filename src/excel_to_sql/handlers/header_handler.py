@@ -4,7 +4,7 @@ Handles Header sheet table detection and column identification using keyword rec
 """
 
 from typing import Optional, Dict, List, Tuple
-from table_models import TableLocation
+from excel_to_sql.table_models import TableLocation
 
 
 class HeaderTableHandler:

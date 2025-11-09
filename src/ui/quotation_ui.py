@@ -16,9 +16,12 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont, QColor, QIcon
 
-from sql.price_loader import PriceListLoader
+from utils.price_calculator import PriceCalculator
 from utils.excel_exporter import ExcelQuotationExporter
 from utils.excel_importer import ExcelItemImporter
+from utils.filter_utils import get_filter_price
+from utils.product_utils import extract_product_flags_and_filter, convert_dimension_to_inches, find_matching_product, extract_slot_number_from_model, get_product_type_flags
+from utils.quote_utils import build_quote_item
 
 
 class ExcelUploadProgressDialog(QDialog):
@@ -142,6 +145,7 @@ class QuotationApp(QMainWindow):
         self.excel_exporter = ExcelQuotationExporter()
         self.font_size_multiplier = 1.0  # Default font size multiplier
         self.original_fonts = {}  # Store original font sizes for widgets
+        self.table_item_base_font_size = 13  # Base font size for table items
         self.init_ui()
         self.load_price_list()
     
@@ -969,7 +973,7 @@ class QuotationApp(QMainWindow):
             return
         
         try:
-            self.price_loader = PriceListLoader(db_file)
+            self.price_loader = PriceCalculator(db_file)
             
             # Store available models for searching
             base_models = self.price_loader.get_available_models()
@@ -999,14 +1003,6 @@ class QuotationApp(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, 'Error', f'Failed to load price database: {str(e)}')
     
-    def extract_product_and_wd(self, product_with_wd):
-        """Extract base product name and WD flag from product string"""
-        product = product_with_wd.strip()
-        has_wd = product.endswith("(WD)")
-        if has_wd:
-            # Remove "(WD)" suffix
-            product = product[:-4].strip()
-        return product, has_wd
     
     def on_product_changed(self):
         """Handle product type change"""
@@ -1015,7 +1011,7 @@ class QuotationApp(QMainWindow):
         
         # Get available finish options for the selected product
         product_with_wd = self.product_input.text().strip()
-        product, _ = self.extract_product_and_wd(product_with_wd)
+        product, _, _, _ = extract_product_flags_and_filter(product_with_wd)
         if product:
             available_finishes = self.price_loader.get_available_finishes(product)
             
@@ -1029,10 +1025,27 @@ class QuotationApp(QMainWindow):
                 # No finishes available for this product
                 self.finish_combo.addItem('No finishes available')
             
-            # Check if this product uses other table format instead of width/height
-            is_other_table = self.price_loader.is_other_table(product)
+            # Get product type flags using consolidated helper
+            has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
             
-            if is_other_table:
+            if has_no_dimensions:
+                # For products with no dimensions, show only height field
+                self.show_hide_widgets(self.width_layout, False)
+                self.show_hide_widgets(self.height_layout, True)
+                self.show_hide_widgets(self.other_table_layout, False)
+                # Update label to indicate height is required
+                unit = self.unit_combo.currentText()
+                unit_text = 'mm' if unit == 'Millimeters' else 'inches'
+                self.height_label.setText(f'Height ({unit_text}) *')
+            elif has_price_per_foot:
+                # For price_per_foot products, show width and height fields (required)
+                self.show_hide_widgets(self.width_layout, True)
+                self.show_hide_widgets(self.height_layout, True)
+                self.show_hide_widgets(self.other_table_layout, False)
+                # Update labels to indicate they are required
+                self.width_label.setText('Width (inches) *')
+                self.height_label.setText('Height (inches) *')
+            elif is_other_table:
                 # Hide width and height fields, show other table size field
                 self.show_hide_widgets(self.width_layout, False)
                 self.show_hide_widgets(self.height_layout, False)
@@ -1042,6 +1055,9 @@ class QuotationApp(QMainWindow):
                 self.show_hide_widgets(self.width_layout, True)
                 self.show_hide_widgets(self.height_layout, True)
                 self.show_hide_widgets(self.other_table_layout, False)
+                # Reset labels if they were modified
+                self.width_label.setText('Width (inches):')
+                self.height_label.setText('Height (inches):')
             
             # Show/hide finish-specific options
             finish = self.finish_combo.currentText()
@@ -1112,11 +1128,11 @@ class QuotationApp(QMainWindow):
         # Validate that the product exists in available models
         if hasattr(self, 'available_models') and product_with_wd not in self.available_models:
             # Try to find a close match
-            matching_models = [model for model in self.available_models 
-                              if product_with_wd.lower() in model.lower()]
-            if matching_models:
-                # Use the first match
-                product_with_wd = matching_models[0]
+            match_result = find_matching_product(product_with_wd, self.available_models)
+            if match_result:
+                # Use the matched product
+                matched_product, matched_has_wd = match_result
+                product_with_wd = matched_product if not matched_has_wd else f"{matched_product}(WD)"
                 self.product_input.setText(product_with_wd)
             else:
                 # No match found, show error
@@ -1180,7 +1196,7 @@ class QuotationApp(QMainWindow):
             return
         
         product_with_wd = self.product_input.text().strip()
-        product, _ = self.extract_product_and_wd(product_with_wd)
+        product, _, _, _ = extract_product_flags_and_filter(product_with_wd)
         finish = self.finish_combo.currentText()
         
         if product and finish:
@@ -1240,7 +1256,15 @@ class QuotationApp(QMainWindow):
             return
         
         product_with_wd = self.product_input.text().strip()
-        product, with_damper = self.extract_product_and_wd(product_with_wd)
+        product, with_damper, _, _ = extract_product_flags_and_filter(product_with_wd)
+        
+        # If no product is selected, show default values
+        if not product:
+            self.unit_price_label.setText('฿ 0.00')
+            self.total_price_label.setText('฿ 0.00')
+            self.rounded_size_label.setText('')
+            return
+        
         finish = self.finish_combo.currentText()
         
         # Process finish to include color/multiplier information for price calculation
@@ -1264,18 +1288,70 @@ class QuotationApp(QMainWindow):
         if self.finish_combo.currentText() == 'Special Color':
             special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
         
-        # Check if this product uses other table format
-        is_other_table = self.price_loader.is_other_table(product)
+        # Get product type flags using consolidated helper
+        if product:
+            has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
+        else:
+            has_no_dimensions = has_price_per_foot = is_other_table = False
         
-        if is_other_table:
+        if has_no_dimensions:
+            # Handle products with no height/width - extract price_id first
+            price_id = self.price_loader.get_price_id_for_no_dimensions(product)
+            if price_id is None:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
+            
+            # Use price_id with appropriate function based on product type
+            if has_price_per_foot:
+                # For price_per_foot products with no dimensions, use get_price_for_price_per_foot with price_id
+                # Note: height is still required for price_per_foot calculation
+                height = self.height_spin.value()
+                unit = self.unit_combo.currentText()
+                height_inches = convert_dimension_to_inches(height, unit)
+                unit_price = self.price_loader.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id)
+                self.rounded_size_label.setText('N/A')
+            elif is_other_table:
+                # For other table products with no dimensions, use find_rounded_other_table_size with price_id
+                rounded_size = self.price_loader.find_rounded_other_table_size(product, finish, 0, price_id=price_id)
+                if not rounded_size:
+                    self.unit_price_label.setText('N/A')
+                    self.total_price_label.setText('฿ 0.00')
+                    self.rounded_size_label.setText('N/A')
+                    return
+                self.rounded_size_label.setText(rounded_size)
+                # Get price using the rounded size
+                unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+
+        elif has_price_per_foot:
+            # Handle price_per_foot products - require width and height
+            width = self.width_spin.value()
+            height = self.height_spin.value()
+            
+            # Convert to inches if needed
+            width_inches = convert_dimension_to_inches(width, unit)
+            height_inches = convert_dimension_to_inches(height, unit)
+            
+            # Find the rounded width that matches database
+            rounded_width = self.price_loader.find_rounded_price_per_foot_width(product, width_inches)
+            if not rounded_width:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
+            
+            # Display the rounded width and height
+            self.rounded_size_label.setText(f'{rounded_width}" x {height_inches}"')
+            
+            # Get price using price_per_foot formula: Height × 0.0833333 × price_per_foot
+            unit_price = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_width, height_inches, with_damper, special_color_multiplier)
+        elif is_other_table:
             # Handle other table products
             size = self.other_table_spin.value()
             
-            # Convert to inches if needed (mm to inches: divide by 25.4)
-            if unit == 'Millimeters':
-                size_inches = size / 25
-            else:
-                size_inches = size
+            # Convert to inches if needed
+            size_inches = convert_dimension_to_inches(size, unit)
             
             # Find the rounded up size for pricing
             rounded_size = self.price_loader.find_rounded_other_table_size(product, finish, size_inches)
@@ -1297,18 +1373,14 @@ class QuotationApp(QMainWindow):
             
             # Validate dimensions: width should be greater than height
             if height > width:
-                self.unit_price_label.setText('Invalid')
+                self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')
-                self.rounded_size_label.setText('Invalid')
+                self.rounded_size_label.setText('N/A')
                 return
             
-            # Convert to inches if needed (mm to inches: divide by 25.4)
-            if unit == 'Millimeters':
-                width_inches = width / 25
-                height_inches = height / 25
-            else:
-                width_inches = width
-                height_inches = height
+            # Convert to inches if needed
+            width_inches = convert_dimension_to_inches(width, unit)
+            height_inches = convert_dimension_to_inches(height, unit)
             
             # Find the rounded up size for pricing
             rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
@@ -1336,6 +1408,7 @@ class QuotationApp(QMainWindow):
         if unit_price is None:
             self.unit_price_label.setText('N/A')
             self.total_price_label.setText('฿ 0.00')
+            self.rounded_size_label.setText('N/A')
             return
         
         discount_amount = unit_price * (discount / 100)
@@ -1355,12 +1428,10 @@ class QuotationApp(QMainWindow):
         if not self.price_loader:
             return
         
-        product_with_wd = self.product_input.text().strip()
-        product, with_damper = self.extract_product_and_wd(product_with_wd)
+        product_input = self.product_input.text().strip()
+        # Extract product name, WD flag, INS flag, and filter type from input
+        product, with_damper, has_ins, filter_type = extract_product_flags_and_filter(product_input)
         finish = self.finish_combo.currentText()
-        
-        # Initialize filter_type (no filter UI, so default to None)
-        filter_type = None
         
         # Add powder coating color to finish if Powder Coated is selected
         if finish == 'Powder Coated':
@@ -1383,158 +1454,70 @@ class QuotationApp(QMainWindow):
         if self.finish_combo.currentText() == 'Special Color':
             special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
         
-        # Check if this product uses other table format
-        is_other_table = self.price_loader.is_other_table(product)
+        # Get product type flags using consolidated helper
+        has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
         
-        if is_other_table:
-            # Handle other table products
-            size = self.other_table_spin.value()
-            
-            # Convert to inches if needed
-            if unit == 'Millimeters':
-                size_inches = size / 25
-            else:
-                size_inches = size
-            
-            # Find the rounded up size for pricing
-            rounded_size = self.price_loader.find_rounded_other_table_size(product, finish, size_inches)
-            
-            # If no rounded size found, try to get price directly (for exceeded dimensions)
-            if not rounded_size:
-                # Try to get price directly with the original size
-                unit_price = self.price_loader.get_price_for_other_table(product, finish, f'{size_inches}" diameter', with_damper, special_color_multiplier)
-                if unit_price == 0:
-                    QMessageBox.warning(self, 'Warning', 'Size not available in price list')
-                    return
-                else:
-                    # Use the original size for exceeded dimensions
-                    rounded_size = f'{size_inches}" diameter'
-            else:
-                # Get price using the rounded size
-                unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
-            
-            if unit_price == 0:
-                QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
-                return
-            
-            # Add filter price if filter is specified
-            if filter_type:
-                filter_price = self._get_filter_price(filter_type, size_inches)
-                if filter_price is None:
-                    QMessageBox.warning(self, 'Warning', f'Filter "{filter_type}" not found in database')
-                    return
-                unit_price += filter_price
-            
-            # Apply discount
-            discount_amount = unit_price * (discount / 100)
-            discounted_unit_price = unit_price - discount_amount
-            total_price = discounted_unit_price * quantity
-            
-            # Create product title - use the original product_with_wd which already has (WD) if applicable
-            product_code = product_with_wd
-            if filter_type:
-                product_code = f"{product_code}+F.{filter_type}"
-            
-            # Store the original size entered by user with proper unit
-            if unit == 'Millimeters':
-                original_size = f"{size}mm"
-            else:
-                original_size = f'{size}"'
-            
-            item = {
-                'product_code': product_code,
-                'size': original_size,  # Original size entered by user
-                'finish': finish,
-                'quantity': quantity,
-                'unit_price': unit_price,  # Original unit price
-                'discount': discount / 100,  # Store as decimal (0.1 for 10%)
-                'discounted_unit_price': discounted_unit_price,  # Price after discount
-                'total': total_price,
-                'rounded_size': rounded_size,  # Rounded size for pricing
-                'detail': self.detail_input.text().strip()  # Detail for Excel column D
-            }
-        else:
-            # Handle width/height-based products
+        # Get dimensions from UI
+        width = None
+        height = None
+        size = None
+        width_unit = unit.lower()
+        height_unit = unit.lower()
+        size_unit = unit.lower()
+        
+        # Extract slot number for no-dimension products
+        slot_number = None
+        if has_no_dimensions:
+            slot_number = extract_slot_number_from_model(product_input)
+        
+        if has_no_dimensions:
+            # For no-dimension products, height might still be needed for price_per_foot
+            if has_price_per_foot:
+                height = self.height_spin.value()
+        elif has_price_per_foot or not is_other_table:
             width = self.width_spin.value()
             height = self.height_spin.value()
             
-            # Validate dimensions: width should be greater than height
-            if height > width:
+            # Validate dimensions: width should be greater than height (for default products)
+            if not has_price_per_foot and height > width:
                 QMessageBox.warning(self, 'Invalid Dimensions', 
                                   'Width must be greater than height. Please adjust the dimensions.')
                 return
-            
-            # Convert to inches if needed
-            if unit == 'Millimeters':
-                width_inches = width / 25
-                height_inches = height / 25
-            else:
-                width_inches = width
-                height_inches = height
-            
-            # Find the rounded up size for pricing
-            rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
-            
-            # If no rounded size found, try to get price directly (for exceeded dimensions)
-            if not rounded_size:
-                # Try to get price directly with the original dimensions
-                unit_price = self.price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', with_damper, special_color_multiplier)
-                if unit_price == 0:
-                    QMessageBox.warning(self, 'Warning', 'Size not available in price list')
-                    return
-                else:
-                    # Use the original size for exceeded dimensions
-                    rounded_size = f'{width_inches}" x {height_inches}"'
-            else:
-                # Get price using the rounded size
-                unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
-            
-            if unit_price == 0:
-                QMessageBox.warning(self, 'Warning', 'Price not available for this configuration')
-                return
-            
-            # Add filter price if filter is specified
-            if filter_type:
-                # Pass actual width and height to filter (filter will use max for sizing)
-                filter_price = self._get_filter_price(filter_type, max(width_inches, height_inches), width_inches, height_inches)
-                if filter_price is None:
-                    QMessageBox.warning(self, 'Warning', f'Filter "{filter_type}" not found in database')
-                    return
-                unit_price += filter_price
-            
-            # Apply discount
-            discount_amount = unit_price * (discount / 100)
-            discounted_unit_price = unit_price - discount_amount
-            total_price = discounted_unit_price * quantity
-            
-            # Create product title - use the original product_with_wd which already has (WD) if applicable
-            product_code = product_with_wd
-            if filter_type:
-                product_code = f"{product_code}+F.{filter_type}"
-            
-            # Store the original size entered by user with proper unit
-            if unit == 'Millimeters':
-                original_size = f"{width}mm x {height}mm"
-            else:
-                original_size = f'{width}" x {height}"'
-            
-            item = {
-                'product_code': product_code,
-                'size': original_size,  # Original size entered by user
-                'finish': finish,
-                'quantity': quantity,
-                'unit_price': unit_price,  # Original unit price
-                'discount': discount / 100,  # Store as decimal (0.1 for 10%)
-                'discounted_unit_price': discounted_unit_price,  # Price after discount
-                'total': total_price,
-                'rounded_size': rounded_size,  # Rounded size for pricing
-                'detail': self.detail_input.text().strip()  # Detail for Excel column D
-            }
+        elif is_other_table:
+            size = self.other_table_spin.value()
+        
+        # Use shared function to build quote item
+        item, error = build_quote_item(
+            price_loader=self.price_loader,
+            product=product,
+            finish=finish,
+            quantity=quantity,
+            has_wd=with_damper,
+            has_price_per_foot=has_price_per_foot,
+            is_other_table=is_other_table,
+            width=width,
+            height=height,
+            size=size,
+            width_unit=width_unit,
+            height_unit=height_unit,
+            size_unit=size_unit,
+            filter_type=filter_type,
+            discount=discount,
+            special_color_multiplier=special_color_multiplier,
+            detail=self.detail_input.text().strip(),
+            has_ins=has_ins,
+            has_no_dimensions=has_no_dimensions,
+            slot_number=slot_number
+        )
+        
+        if error:
+            QMessageBox.warning(self, 'Warning', error)
+            return
         
         self.quote_items.append(item)
         self.refresh_items_table()
         
-        self.statusBar().showMessage(f'Added {product_code} {item["size"]} to quote')
+        self.statusBar().showMessage(f'Added {item["product_code"]} {item["size"]} to quote')
     
     def add_title_to_quote(self):
         """Add a title item to the quote"""
@@ -1573,13 +1556,8 @@ class QuotationApp(QMainWindow):
         grand_total = 0
         item_counter = 1
         
-        # Get base font size (use stored original if available, otherwise use default)
-        table_id = id(self.items_table)
-        if table_id in self.original_fonts:
-            base_font_size = self.original_fonts[table_id]['font'].pointSize()
-        else:
-            base_font_size = 9  # Default font size
-        adjusted_font_size = max(1, int(base_font_size * self.font_size_multiplier))
+        # Use the base font size for table items (always use the stored base, not the current font)
+        adjusted_font_size = max(1, int(self.table_item_base_font_size * self.font_size_multiplier))
         
         for row, item in enumerate(self.quote_items):
             if item.get('is_title', False):
@@ -1810,13 +1788,14 @@ class QuotationApp(QMainWindow):
             header_font.setPointSize(new_header_size)
             header.setFont(header_font)
             
-            # Update font for existing table items
+            # Update font for existing table items (use base font size, not current)
+            base_item_size = self.table_item_base_font_size
+            new_item_size = max(1, int(base_item_size * multiplier))
             for row in range(self.items_table.rowCount()):
                 for col in range(self.items_table.columnCount()):
                     item = self.items_table.item(row, col)
                     if item:
                         item_font = item.font()
-                        new_item_size = max(1, int(item_font.pointSize() * multiplier))
                         item_font.setPointSize(new_item_size)
                         item.setFont(item_font)
     
@@ -1952,119 +1931,3 @@ class QuotationApp(QMainWindow):
             progress_dialog.close()
             QMessageBox.critical(self, 'Error', f'Failed to parse Excel file: {str(e)}')
     
-    def _get_filter_price(self, filter_type, size_inches, width_inches=None, height_inches=None):
-        """
-        Find filter product in database and get its price.
-        
-        Args:
-            filter_type: The filter type (e.g., "Nylon")
-            size_inches: The size in inches (for diameter-based filters) or max dimension
-            width_inches: Optional width in inches for dimension-based filters
-            height_inches: Optional height in inches for dimension-based filters
-            
-        Returns:
-            Filter price or None if not found
-        """
-        if not self.price_loader:
-            return None
-        
-        # Get all available models
-        all_models = self.price_loader.get_available_models()
-        
-        # Search for filter product that matches the filter type
-        filter_type_lower = filter_type.lower()
-        matching_filter = None
-        
-        # Simple matching: find any product that contains the filter type word
-        for model in all_models:
-            model_lower = model.lower()
-            if filter_type_lower in model_lower:
-                matching_filter = model
-                break
-        
-        if not matching_filter:
-            return None
-        
-        # Get available finishes for the filter
-        finishes = self.price_loader.get_available_finishes(matching_filter)
-        if not finishes:
-            return None
-        
-        # Use first available finish
-        finish = finishes[0]
-        
-        # Check if filter is diameter-based (other table) or dimension-based
-        is_other_table = self.price_loader.is_other_table(matching_filter)
-        
-        if is_other_table:
-            # For diameter-based filters, get base price directly from database
-            price = self._get_base_price_for_other_table(matching_filter, size_inches)
-            return price if price and price > 0 else None
-        else:
-            # For dimension-based filters, use actual width and height if provided
-            if width_inches is not None and height_inches is not None:
-                # Ensure width >= height (database convention)
-                filter_width = max(width_inches, height_inches)
-                filter_height = min(width_inches, height_inches)
-                price = self._get_base_price_for_default_table(matching_filter, filter_width, filter_height)
-            else:
-                # Fallback: use size_inches for both dimensions (square filter)
-                price = self._get_base_price_for_default_table(matching_filter, size_inches, size_inches)
-            return price if price and price > 0 else None
-    
-    def _get_base_price_for_other_table(self, product, diameter_inches):
-        """Get base price for other table product directly from database"""
-        conn = self.price_loader._get_connection()
-        if not conn:
-            return None
-        
-        cursor = conn.cursor()
-        cursor.execute('SELECT table_id FROM products WHERE model = ? LIMIT 1', (product,))
-        table_result = cursor.fetchone()
-        if not table_result:
-            return None
-        
-        table_id = table_result[0]
-        diameter_int = int(diameter_inches)
-        
-        cursor.execute('''
-            SELECT width, normal_price
-            FROM prices
-            WHERE table_id = ? AND height IS NULL AND width >= ?
-            ORDER BY width
-            LIMIT 1
-        ''', (table_id, diameter_int))
-        
-        result = cursor.fetchone()
-        return result[1] if result else None
-    
-    def _get_base_price_for_default_table(self, product, width_inches, height_inches):
-        """Get base price for default table product directly from database"""
-        conn = self.price_loader._get_connection()
-        if not conn:
-            return None
-        
-        cursor = conn.cursor()
-        cursor.execute('SELECT table_id FROM products WHERE model = ? LIMIT 1', (product,))
-        table_result = cursor.fetchone()
-        if not table_result:
-            return None
-        
-        table_id = table_result[0]
-        width_int = int(width_inches)
-        height_int = int(height_inches)
-        
-        cursor.execute('''
-            SELECT height, width, normal_price,
-                   CASE 
-                       WHEN height = ? AND width = ? THEN 0
-                       ELSE (height - ?) + (width - ?)
-                   END as priority
-            FROM prices
-            WHERE table_id = ? AND height >= ? AND width >= ?
-            ORDER BY priority, height, width
-            LIMIT 1
-        ''', (height_int, width_int, height_int, width_int, table_id, height_int, width_int))
-        
-        result = cursor.fetchone()
-        return result[2] if result else None

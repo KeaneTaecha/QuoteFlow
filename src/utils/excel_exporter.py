@@ -4,6 +4,7 @@ Generates Excel quotations matching the company template format
 """
 
 import openpyxl
+import re
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 from datetime import datetime
@@ -89,17 +90,12 @@ class ExcelQuotationExporter:
         if 'Anodized' in finish:
             return 'สีอลูมิเนียม'
         elif 'Powder Coated' in finish:
-            # Extract the color from "Powder Coated - Color" format
-            if ' - ' in finish:
-                color = finish.split(' - ', 1)[1]
-                return f'สี{color}'
-            else:
-                return 'สีขาวนวล'  # Default powder coating color
+            return 'สีอบขาว'
         elif 'Special Color' in finish:
             # Extract the multiplier from "Special Color - X.X" format
             if ' - ' in finish:
-                multiplier = finish.split(' - ', 1)[1]
-                return f'สีพิเศษ (x{multiplier})'
+                color = finish.split(' - ', 1)[1]
+                return color
             else:
                 return 'สีพิเศษ'  # Default special color
         else:
@@ -211,26 +207,90 @@ class ExcelQuotationExporter:
                 # Parse size - G(Height) H(x) I(Width) J(Unit) - only for regular items
                 size = item.get('size', '')
                 
-                if 'mm' in size:
-                    parts = size.replace('mm', '').split('x')
-                    if len(parts) == 2:
-                        width_mm = float(parts[0].strip())
-                        height_mm = float(parts[1].strip())
-                        self._safe_set_cell_value(f'G{current_row}', width_mm, normal_font, center_alignment)
-                        self._safe_set_cell_value(f'H{current_row}', 'x', normal_font, center_alignment)
-                        self._safe_set_cell_value(f'I{current_row}', height_mm, normal_font, center_alignment)
-                        # Unit in column J for mm
-                        self._safe_set_cell_value(f'J{current_row}', 'mm', normal_font, center_alignment)
+                def parse_dimension(value_str, field_name):
+                    """Parse dimension value and detect unit. Returns (numeric_value, unit_string)."""
+                    if not value_str:
+                        raise ValueError(f"Empty {field_name} value")
+                    value_str = value_str.strip()
+                    
+                    # Detect unit
+                    has_mm = 'mm' in value_str.lower()
+                    has_quote = '"' in value_str or "'" in value_str
+                    
+                    # Extract numeric value
+                    cleaned = value_str.replace('"', '').replace("'", '').replace('"', '').replace("'", '').replace('mm', '').replace('MM', '').replace('Mm', '').strip()
+                    match = re.search(r'-?\d+\.?\d*', cleaned)
+                    if not match:
+                        raise ValueError(f"Could not extract numeric value from {field_name} '{value_str}'")
+                    
+                    try:
+                        numeric_value = float(match.group())
+                    except ValueError as e:
+                        raise ValueError(f"Could not convert {field_name} '{value_str}' to float: {e}")
+                    
+                    # Determine unit
+                    if has_mm:
+                        return numeric_value, 'mm'
+                    elif has_quote:
+                        return numeric_value, '"'
+                    else:
+                        # No explicit unit - default to mm if value > 100, otherwise inches
+                        return numeric_value, 'mm' if numeric_value > 100 else '"'
+                
+                parts = size.split('x')
+                if len(parts) != 2:
+                    raise ValueError(f"Invalid size format (expected 'WIDTH x HEIGHT'): '{size}'")
+                
+                width_part = parts[0].strip()
+                height_part = parts[1].strip()
+                
+                # Check if width contains "Slot" - preserve it in display
+                has_slot = 'Slot' in width_part or 'slot' in width_part
+                
+                width_val, width_unit = parse_dimension(width_part, 'width')
+                height_val, height_unit = parse_dimension(height_part, 'height')
+                
+                # Helper to format numbers (remove .0 for whole numbers)
+                def format_number(num):
+                    return int(num) if num == int(num) else num
+                
+                # Display logic: if same unit, show numbers only; if different, show units after numbers
+                # Special handling for "Slot" in width
+                if has_slot:
+                    # Slot has no unit, always display as "7Slot" format
+                    width_display = f'{format_number(width_val)}Slot'
+                    # Use height unit for unit_display since Slot has no unit
+                    if height_unit == '"':
+                        height_display = format_number(height_val)
+                        unit_display = 'in'  # Height is in inches
+                    else:
+                        height_display = format_number(height_val)
+                        unit_display = 'mm'  # Height is in mm
+                elif width_unit == height_unit:
+                    # Same unit: show numbers only, put unit in column J
+                    width_display = format_number(width_val)
+                    height_display = format_number(height_val)
+                    unit_display = 'mm' if width_unit == 'mm' else 'in'
                 else:
-                    parts = size.replace('"', '').split('x')
-                    if len(parts) == 2:
-                        width_in = float(parts[0].strip())
-                        height_in = float(parts[1].strip())
-                        self._safe_set_cell_value(f'G{current_row}', width_in, normal_font, center_alignment)
-                        self._safe_set_cell_value(f'H{current_row}', 'x', normal_font, center_alignment)
-                        self._safe_set_cell_value(f'I{current_row}', height_in, normal_font, center_alignment)
-                        # Unit in column J for inches
-                        self._safe_set_cell_value(f'J{current_row}', 'in', normal_font, center_alignment)
+                    # Different units: show units after numbers, leave column J empty
+                    # For inches, we need to store as string with " symbol
+                    # For mm, store as numeric value to avoid "number stored as text" warning
+                    if width_unit == '"':
+                        width_display = f'{format_number(width_val)}"'
+                    else:
+                        width_display = format_number(width_val)
+                    
+                    if height_unit == '"':
+                        height_display = f'{format_number(height_val)}"'
+                    else:
+                        height_display = format_number(height_val)
+                    
+                    unit_display = 'mm'
+                
+                self._safe_set_cell_value(f'G{current_row}', width_display, normal_font, center_alignment)
+                self._safe_set_cell_value(f'H{current_row}', 'x', normal_font, center_alignment)
+                self._safe_set_cell_value(f'I{current_row}', height_display, normal_font, center_alignment)
+                self._safe_set_cell_value(f'J{current_row}', unit_display, normal_font, center_alignment)
                 
                 # QTY in column K
                 quantity = int(item.get('quantity', 1))
@@ -459,47 +519,3 @@ class ExcelQuotationExporter:
         except:
             return False
     
-    def _copy_row_formatting(self, source_row, target_row):
-        """Copy all formatting from source row to target row"""
-        for col in range(1, 19):  # A to P
-            source_cell = self.ws.cell(row=source_row, column=col)
-            target_cell = self.ws.cell(row=target_row, column=col)
-            
-            # Copy font
-            if source_cell.font:
-                target_cell.font = Font(
-                    name=source_cell.font.name,
-                    size=source_cell.font.size,
-                    bold=source_cell.font.bold,
-                    italic=source_cell.font.italic,
-                    color=source_cell.font.color
-                )
-            
-            # Copy alignment
-            if source_cell.alignment:
-                target_cell.alignment = Alignment(
-                    horizontal=source_cell.alignment.horizontal,
-                    vertical=source_cell.alignment.vertical,
-                    wrap_text=source_cell.alignment.wrap_text
-                )
-            
-            # Copy border
-            if source_cell.border:
-                target_cell.border = Border(
-                    left=Side(style=source_cell.border.left.style, color=source_cell.border.left.color) if source_cell.border.left else None,
-                    right=Side(style=source_cell.border.right.style, color=source_cell.border.right.color) if source_cell.border.right else None,
-                    top=Side(style=source_cell.border.top.style, color=source_cell.border.top.color) if source_cell.border.top else None,
-                    bottom=Side(style=source_cell.border.bottom.style, color=source_cell.border.bottom.color) if source_cell.border.bottom else None
-                )
-            
-            # Copy fill
-            if source_cell.fill:
-                target_cell.fill = PatternFill(
-                    fill_type=source_cell.fill.fill_type,
-                    start_color=source_cell.fill.start_color,
-                    end_color=source_cell.fill.end_color
-                )
-            
-            # Copy number format (important for unit prices)
-            if source_cell.number_format:
-                target_cell.number_format = source_cell.number_format

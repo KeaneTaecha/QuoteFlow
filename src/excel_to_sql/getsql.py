@@ -15,10 +15,10 @@ import sqlite3
 import openpyxl
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Set
-from handlers.other_handler import OtherTableHandler
-from handlers.default_handler import DefaultTableHandler
-from handlers.header_handler import HeaderTableHandler
-from table_models import TableLocation
+from excel_to_sql.handlers.other_handler import OtherTableHandler
+from excel_to_sql.handlers.default_handler import DefaultTableHandler
+from excel_to_sql.handlers.header_handler import HeaderTableHandler
+from excel_to_sql.table_models import TableLocation
 
 
 class ExcelToSQLiteConverter:
@@ -76,6 +76,7 @@ class ExcelToSQLiteConverter:
                 width INTEGER,
                 normal_price REAL,
                 price_with_damper REAL,
+                price_per_foot REAL,
                 FOREIGN KEY (table_id) REFERENCES products(table_id) ON UPDATE CASCADE,
                 UNIQUE(table_id, height, width)
             )
@@ -130,9 +131,9 @@ class ExcelToSQLiteConverter:
         return None
 
     def detect_table_at_position(self, sheet, start_row: int, start_col: int, 
-                            processed_areas: Set[Tuple[int, int]]) -> Optional[TableLocation]:
+                            processed_areas: Set[Tuple[int, int]], model_names=None) -> Optional[TableLocation]:
         """Detect a table at a specific position and return its boundaries"""
-        
+        print(f"Detecting table at position: {start_row}, {start_col}")
         # Check if this area was already processed
         if (start_row, start_col) in processed_areas:
             return None
@@ -143,19 +144,25 @@ class ExcelToSQLiteConverter:
             return default_table
         
         # If no default table found, try to detect other table
-        other_table = self.other_handler.get_other_table_bounderies(sheet, start_row, start_col)
+        other_table = self.other_handler.get_other_table_bounderies(sheet, start_row, start_col, model_names)
         if other_table:
             return other_table
         
         return None
     
-    def detect_all_tables(self, sheet, expected_count: Optional[int] = None) -> List[TableLocation]:
+    def detect_all_tables(self, sheet, expected_count: Optional[int] = None, sheet_name: Optional[str] = None) -> List[TableLocation]:
         """Detect all tables in a sheet using pattern recognition"""
         tables = []
         processed_areas = set()
         max_search_row = min(200, sheet.max_row)  # Limit search depth
         max_search_col = min(100, sheet.max_column)  # Limit search width
         
+        # Get all model names for this sheet from header data
+        model_names = set()
+        if sheet_name and sheet_name in self.sheet_entries:
+            for entry in self.sheet_entries[sheet_name]:
+                model_names.update(entry.get('models', []))
+
         # Unified detection for all sheets - no special handling based on sheet name
         for row in range(1, max_search_row + 1):
             for col in range(1, max_search_col + 1):
@@ -173,22 +180,27 @@ class ExcelToSQLiteConverter:
                     values_found = 1  # Start with current cell
                     consecutive_disruptions = 0
                     
-                    # Check cells below for inch values
+                    # Check cells below for inch values or model names
                     for offset in range(1, 7):  # Start from offset 1, not 2
                         if row + offset > max_search_row:  # Bounds checking
                             break
                             
                         below_cell = sheet.cell(row + offset, col)
+                        below_value = below_cell.value
                         
-                        if self.is_inch_value(below_cell.value):
-                            # Found an inch value - reset disruption count and increment values
+                        # Check if it's an inch value or matches a model name
+                        cell_str = str(below_value).strip() if below_value is not None else ""
+                        
+                        if self.is_inch_value(below_value) or (model_names and cell_str and cell_str in model_names):
+                            print(f"Found valid value: {below_value}")
+                            # Found an inch value or model name - reset disruption count and increment values
                             values_found += 1
                             consecutive_disruptions = 0
                             
-                            # Check if we found enough inch values to consider this a table
+                            # Check if we found enough values to consider this a table
                             if values_found >= 3 and consecutive_disruptions <= 1:
                                 # Potential table found, try to determine its boundaries
-                                table = self.detect_table_at_position(sheet, row, col, processed_areas)
+                                table = self.detect_table_at_position(sheet, row, col, processed_areas, model_names)
                                 if table:
                                     tables.append(table)
                                     # Mark this area as processed
@@ -217,10 +229,10 @@ class ExcelToSQLiteConverter:
         
         return tables
     
-    def extract_and_store_prices(self, sheet, table_loc: TableLocation, table_id: int) -> int:
+    def extract_and_store_prices(self, sheet, table_loc: TableLocation, table_id: int, model_names=None) -> int:
         """Extract price data from a table and store in database"""
         if table_loc.table_type == "other":
-            return self.other_handler.extract_other_table_prices(sheet, table_loc, table_id, self.conn)
+            return self.other_handler.extract_other_table_prices(sheet, table_loc, table_id, self.conn, model_names)
         
         # Extract from default/standard table
         return self.default_handler.extract_default_table_prices(sheet, table_loc, table_id, self.conn)
@@ -304,9 +316,14 @@ class ExcelToSQLiteConverter:
             return 0
         
         total_prices = 0
-        detected_tables = self.detect_all_tables(sheet, len(entries))
+        detected_tables = self.detect_all_tables(sheet, len(entries), sheet_name)
         
         print(f"  Processing {len(entries)} table(s) - detected {len(detected_tables)} table(s)")
+        
+        # Get all model names for this sheet
+        model_names = set()
+        for entry in entries:
+            model_names.update(entry.get('models', []))
         
         # Process each detected table
         for i, table_loc in enumerate(detected_tables):
@@ -323,7 +340,7 @@ class ExcelToSQLiteConverter:
                 )
                 
                 # Process the table
-                price_count = self.extract_and_store_prices(sheet, table_loc, entry['table_id'])
+                price_count = self.extract_and_store_prices(sheet, table_loc, entry['table_id'], model_names)
                 total_prices += price_count
                 self.stats['total_tables'] += 1
                 print(f"      ✓ {price_count} prices imported")

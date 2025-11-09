@@ -1,0 +1,573 @@
+"""
+Database Access Module
+Handles all database operations for the price database.
+Separated from price calculation logic for better code organization.
+"""
+
+import sqlite3
+from pathlib import Path
+from typing import Optional, List, Tuple
+
+
+class PriceDatabase:
+    """Handles all database operations for price queries"""
+    
+    def __init__(self, db_path='../prices.db'):
+        self.db_path = db_path
+        self.conn = None
+        self._check_database()
+    
+    def _check_database(self):
+        """Check if database exists and is accessible"""
+        if not Path(self.db_path).exists():
+            print(f"❌ Error: Database file '{self.db_path}' not found!")
+            return False
+        return True
+    
+    def get_connection(self):
+        """Get database connection, creating one if needed"""
+        if self.conn is None:
+            if not self._check_database():
+                return None
+            self.conn = sqlite3.connect(self.db_path)
+        return self.conn
+    
+    def close(self):
+        """Close database connection"""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+    
+    # Product queries
+    def get_available_models(self) -> List[str]:
+        """Get list of available product models"""
+        conn = self.get_connection()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor()
+        cursor.execute('SELECT DISTINCT model FROM products ORDER BY model')
+        return [row[0] for row in cursor.fetchall()]
+    
+    def get_available_finishes(self, product: str) -> List[str]:
+        """Get list of available finish options for a specific product"""
+        conn = self.get_connection()
+        if not conn:
+            return []
+        
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT anodized_multiplier, powder_coated_multiplier 
+            FROM products 
+            WHERE model = ? 
+            LIMIT 1
+        ''', (product,))
+        
+        result = cursor.fetchone()
+        if not result:
+            return []
+        
+        available_finishes = []
+        anodized_multiplier, powder_coated_multiplier = result
+        
+        # Check if anodized aluminum is available (multiplier is not None)
+        if anodized_multiplier is not None:
+            available_finishes.append('Anodized Aluminum')
+        
+        # Check if powder coated is available (multiplier is not None)
+        if powder_coated_multiplier is not None:
+            available_finishes.append('Powder Coated')
+        
+        # Always add Special Color option
+        available_finishes.append('Special Color')
+        
+        return available_finishes
+    
+    def check_product_condition(self, product: str, condition_sql: str) -> bool:
+        """Helper method to check product conditions in database"""
+        conn = self.get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        cursor.execute(f'''
+            SELECT COUNT(*) 
+            FROM products p
+            JOIN prices pr ON p.table_id = pr.table_id
+            WHERE p.model = ? AND {condition_sql}
+        ''', (product,))
+        
+        result = cursor.fetchone()
+        return result[0] > 0 if result else False
+    
+    def is_other_table(self, product: str) -> bool:
+        """Check if a product uses other table format (diameter-based) instead of width/height"""
+        return self.check_product_condition(product, 'pr.height IS NULL')
+    
+    def has_price_per_foot(self, product: str) -> bool:
+        """Check if a product has price_per_foot pricing"""
+        return self.check_product_condition(product, 'pr.price_per_foot IS NOT NULL')
+    
+    def has_no_dimensions(self, product: str) -> bool:
+        """Check if a product has no height and width (both are NULL)"""
+        return self.check_product_condition(product, 'pr.height IS NULL AND pr.width IS NULL')
+    
+    def has_damper_option(self, product: str) -> bool:
+        """Check if a product has a non-null WD multiplier in the header sheet"""
+        conn = self.get_connection()
+        if not conn:
+            return False
+        
+        cursor = conn.cursor()
+        
+        # Get WD multiplier for the product from the products table
+        cursor.execute('SELECT wd_multiplier FROM products WHERE model = ? LIMIT 1', (product,))
+        result = cursor.fetchone()
+        if not result:
+            return False
+        
+        wd_multiplier = result[0]
+        # Return True only if WD multiplier is not None and not empty
+        return wd_multiplier is not None and str(wd_multiplier).strip() != ''
+    
+    def get_price_id_for_no_dimensions(self, product: str) -> Optional[int]:
+        """Get price_id for a product with no height/width by calculating from product_id difference
+        
+        Args:
+            product: Product model name
+            
+        Returns:
+            price_id or None if not found
+        """
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        
+        # Get current product_id and table_id for the product
+        cursor.execute('SELECT product_id, table_id FROM products WHERE model = ? LIMIT 1', (product,))
+        product_result = cursor.fetchone()
+        if not product_result:
+            return None
+        
+        current_product_id = product_result[0]
+        table_id = product_result[1]
+        
+        # Get the first product_id that uses the table_id
+        cursor.execute('SELECT MIN(product_id) FROM products WHERE table_id = ?', (table_id,))
+        first_product_result = cursor.fetchone()
+        if not first_product_result or first_product_result[0] is None:
+            return None
+        
+        first_product_id = first_product_result[0]
+        
+        # Calculate difference
+        difference = current_product_id - first_product_id
+        
+        # Get the first price_id that uses the table_id (where height IS NULL and width IS NULL)
+        cursor.execute('''
+            SELECT MIN(price_id)
+            FROM prices
+            WHERE table_id = ? AND height IS NULL AND width IS NULL
+        ''', (table_id,))
+        
+        first_price_result = cursor.fetchone()
+        if not first_price_result or first_price_result[0] is None:
+            return None
+        
+        first_price_id = first_price_result[0]
+        
+        # Calculate target price_id
+        target_price_id = first_price_id + difference
+        
+        return target_price_id
+    
+    # Product data queries
+    def get_product_data(self, product: str) -> Optional[Tuple]:
+        """Get product data (table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_multiplier)
+        
+        Returns:
+            Tuple of (table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_multiplier) or None
+        """
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('SELECT table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_multiplier FROM products WHERE model = ? LIMIT 1', (product,))
+        return cursor.fetchone()
+    
+    def get_product_multipliers(self, product: str) -> Optional[Tuple]:
+        """Get product multipliers (anodized_multiplier, powder_coated_multiplier)
+        
+        Returns:
+            Tuple of (anodized_multiplier, powder_coated_multiplier) or None
+        """
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('SELECT anodized_multiplier, powder_coated_multiplier FROM products WHERE model = ? LIMIT 1', (product,))
+        return cursor.fetchone()
+    
+    def get_table_id(self, product: str) -> Optional[int]:
+        """Get table_id for a product"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('SELECT table_id FROM products WHERE model = ? LIMIT 1', (product,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    # Price queries
+    def get_price_for_dimensions(self, table_id: int, height: int, width: int) -> Optional[Tuple[float, float]]:
+        """Get normal_price and price_with_damper for given dimensions
+        
+        Returns:
+            Tuple of (normal_price, price_with_damper) or None
+        """
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT normal_price, price_with_damper
+            FROM prices
+            WHERE table_id = ? AND height = ? AND width = ?
+        ''', (table_id, height, width))
+        
+        result = cursor.fetchone()
+        if not result or (result[0] is None and result[1] is None):
+            return None
+        return result
+    
+    def get_price_for_diameter(self, table_id: int, diameter: int) -> Optional[Tuple[float, float]]:
+        """Get normal_price and price_with_damper for given diameter (other table)
+        
+        Returns:
+            Tuple of (normal_price, price_with_damper) or None
+        """
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT normal_price, price_with_damper
+            FROM prices
+            WHERE table_id = ? AND height IS NULL AND width = ?
+        ''', (table_id, diameter))
+        
+        result = cursor.fetchone()
+        if not result or (result[0] is None and result[1] is None):
+            return None
+        return result
+    
+    def get_price_per_foot(self, table_id: int, width: int, price_id: Optional[int] = None) -> Optional[float]:
+        """Get price_per_foot for given table_id and width, or by price_id
+        
+        Returns:
+            price_per_foot value or None
+        """
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        
+        if price_id is not None:
+            cursor.execute('''
+                SELECT price_per_foot
+                FROM prices
+                WHERE price_id = ? AND price_per_foot IS NOT NULL
+            ''', (price_id,))
+        else:
+            cursor.execute('''
+                SELECT price_per_foot
+                FROM prices
+                WHERE table_id = ? AND width = ? AND price_per_foot IS NOT NULL
+                ORDER BY width
+                LIMIT 1
+            ''', (table_id, width))
+        
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    def get_price_by_id(self, price_id: int) -> Optional[Tuple]:
+        """Get price data by price_id
+        
+        Returns:
+            Tuple of price data or None
+        """
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM prices WHERE price_id = ?', (price_id,))
+        return cursor.fetchone()
+    
+    def get_diameter_by_price_id(self, price_id: int) -> Optional[int]:
+        """Get diameter (width) for a price_id in other table format"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT width
+            FROM prices
+            WHERE price_id = ? AND height IS NULL
+        ''', (price_id,))
+        
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    # Size lookup queries
+    def find_rounded_price_per_foot_width(self, product: str, width: int) -> Optional[int]:
+        """Find the exact match first, then the next available width that is >= the given width for price_per_foot products"""
+        table_id = self.get_table_id(product)
+        if table_id is None:
+            return None
+        
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        
+        # Find exact match first, then closest >= match
+        cursor.execute('''
+            SELECT width,
+                   CASE 
+                       WHEN width = ? THEN 0
+                       ELSE width - ?
+                   END as priority
+            FROM prices
+            WHERE table_id = ? AND price_per_foot IS NOT NULL AND width >= ?
+            ORDER BY priority, width
+            LIMIT 1
+        ''', (width, width, table_id, width))
+        
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    def find_rounded_default_table_size(self, product: str, width: int, height: int) -> Optional[str]:
+        """Find the exact match first, then the next available size that is >= the given width and height"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        
+        # Single query: prioritize exact match, then closest >= match
+        cursor.execute('''
+            SELECT pr.height, pr.width,
+                   CASE 
+                       WHEN pr.height = ? AND pr.width = ? THEN 0
+                       ELSE (pr.height - ?) + (pr.width - ?)
+                   END as priority
+            FROM products p
+            JOIN prices pr ON p.table_id = pr.table_id
+            WHERE p.model = ? AND pr.height >= ? AND pr.width >= ?
+            ORDER BY priority, pr.height, pr.width
+            LIMIT 1
+        ''', (height, width, height, width, product, height, width))
+        
+        result = cursor.fetchone()
+        if result:
+            # Return format: width x height (height after width)
+            return f'{result[1]}" x {result[0]}"'
+        
+        return None
+    
+    def find_rounded_other_table_size(self, product: str, diameter: int, price_id: Optional[int] = None) -> Optional[str]:
+        """Find the exact match first, then the next available diameter that is >= the given diameter for other table products
+        
+        Args:
+            product: Product model name
+            diameter: Diameter in inches (not used if price_id is provided)
+            price_id: Optional price_id to use directly (for has_no_dimensions case)
+            
+        Returns:
+            Size string (e.g., "8\" diameter") or None if not found
+        """
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        
+        # If price_id is provided, use it directly (for has_no_dimensions case)
+        if price_id is not None:
+            diameter_result = self.get_diameter_by_price_id(price_id)
+            if diameter_result:
+                return f'{diameter_result}" diameter'
+            return None
+        
+        # Single query: prioritize exact match, then closest >= match
+        cursor.execute('''
+            SELECT pr.width,
+                   CASE 
+                       WHEN pr.width = ? THEN 0
+                       ELSE pr.width - ?
+                   END as priority
+            FROM products p
+            JOIN prices pr ON p.table_id = pr.table_id
+            WHERE p.model = ? AND pr.height IS NULL AND pr.width >= ?
+            ORDER BY priority, pr.width
+            LIMIT 1
+        ''', (diameter, diameter, product, diameter))
+        
+        result = cursor.fetchone()
+        if result:
+            return f'{result[0]}" diameter'
+        
+        return None
+    
+    # Multiplier queries
+    def get_exceeded_dimension_multiplier(self, table_id: int, width: int, height: int, with_damper: bool = False) -> Optional[float]:
+        """Get the appropriate multiplier when dimensions exceed table limits"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        
+        # Get the maximum dimensions available in the table
+        cursor.execute('''
+            SELECT MAX(height), MAX(width)
+            FROM prices
+            WHERE table_id = ?
+        ''', (table_id,))
+        
+        max_dims = cursor.fetchone()
+        if not max_dims or not max_dims[0] or not max_dims[1]:
+            return None
+        
+        max_height, max_width = max_dims
+        
+        # Check if both dimensions exceed limits - use fallback pricing
+        if width > max_width and height > max_height:
+            # Use the highest available multipliers as fallback
+            # Try to get the highest row multiplier (for height exceeded)
+            cursor.execute('''
+                SELECT height_exceeded_multiplier, height_exceeded_multiplier_wd
+                FROM row_multipliers
+                WHERE table_id = ?
+                ORDER BY width DESC
+                LIMIT 1
+            ''', (table_id,))
+            row_result = cursor.fetchone()
+            
+            # Try to get the highest column multiplier (for width exceeded)
+            cursor.execute('''
+                SELECT width_exceeded_multiplier, width_exceeded_multiplier_wd
+                FROM column_multipliers
+                WHERE table_id = ?
+                ORDER BY height DESC
+                LIMIT 1
+            ''', (table_id,))
+            col_result = cursor.fetchone()
+            
+            # Use the higher of the two multipliers as fallback
+            if row_result and col_result:
+                if with_damper:
+                    row_mult = row_result[1] if row_result[1] is not None else 0
+                    col_mult = col_result[1] if col_result[1] is not None else 0
+                else:
+                    row_mult = row_result[0] if row_result[0] is not None else 0
+                    col_mult = col_result[0] if col_result[0] is not None else 0
+                
+                # Use the higher multiplier
+                return max(row_mult, col_mult) if max(row_mult, col_mult) > 0 else None
+            
+            return None
+        
+        # Check if only width exceeds limit - use specific height column multiplier
+        elif width > max_width:
+            # Find the closest height column that has a width exceeded multiplier
+            # Use the actual height value to look up in column_multipliers
+            cursor.execute('''
+                SELECT width_exceeded_multiplier, width_exceeded_multiplier_wd
+                FROM column_multipliers
+                WHERE table_id = ? AND height <= ?
+                ORDER BY height DESC
+                LIMIT 1
+            ''', (table_id, height))
+            result = cursor.fetchone()
+            if result:
+                # Return appropriate multiplier based with_damper flag
+                if with_damper and result[1] is not None:
+                    return result[1]  # WD multiplier
+                elif not with_damper and result[0] is not None:
+                    return result[0]  # Regular multiplier
+            return None
+        
+        # Check if only height exceeds limit - use specific width row multiplier
+        elif height > max_height:
+            # Find the closest width row that has a height exceeded multiplier
+            # Use the actual width value to look up in row_multipliers
+            cursor.execute('''
+                SELECT height_exceeded_multiplier, height_exceeded_multiplier_wd
+                FROM row_multipliers
+                WHERE table_id = ? AND width <= ?
+                ORDER BY width DESC
+                LIMIT 1
+            ''', (table_id, width))
+            result = cursor.fetchone()
+            if result:
+                # Return appropriate multiplier based on with_damper flag
+                if with_damper and result[1] is not None:
+                    return result[1]  # WD multiplier
+                elif not with_damper and result[0] is not None:
+                    return result[0]  # Regular multiplier
+            return None
+        
+        # No dimensions exceeded
+        return None
+    
+    def get_max_dimensions(self, table_id: int) -> Optional[Tuple[int, int]]:
+        """Get maximum height and width for a table_id"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT MAX(height), MAX(width)
+            FROM prices
+            WHERE table_id = ?
+        ''', (table_id,))
+        
+        result = cursor.fetchone()
+        if not result or not result[0] or not result[1]:
+            return None
+        return (result[0], result[1])
+    
+    def find_closest_price_for_dimensions(self, table_id: int, height: int, width: int) -> Optional[Tuple[int, int, float, float]]:
+        """Find closest available dimensions and prices (height, width, normal_price, price_with_damper)"""
+        conn = self.get_connection()
+        if not conn:
+            return None
+        
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT height, width, normal_price, price_with_damper
+            FROM prices
+            WHERE table_id = ? AND height <= ? AND width <= ?
+            ORDER BY height DESC, width DESC
+            LIMIT 1
+        ''', (table_id, height, width))
+        
+        return cursor.fetchone()
+    
+    def __del__(self):
+        """Clean up database connection when object is destroyed"""
+        self.close()
+
