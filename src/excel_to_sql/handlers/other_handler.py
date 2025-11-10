@@ -5,7 +5,7 @@ Handles other-type table detection and price extraction for the quotation system
 
 import re
 from typing import Optional, Tuple
-from excel_to_sql.table_models import TableLocation
+from table_models import TableLocation
 
 
 class OtherTableHandler:

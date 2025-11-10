@@ -4,7 +4,7 @@ Handles default/standard table detection and price extraction for the quotation 
 """
 
 from typing import Optional
-from excel_to_sql.table_models import TableLocation
+from table_models import TableLocation
 
 
 class DefaultTableHandler:

@@ -15,10 +15,10 @@ import sqlite3
 import openpyxl
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Set
-from excel_to_sql.handlers.other_handler import OtherTableHandler
-from excel_to_sql.handlers.default_handler import DefaultTableHandler
-from excel_to_sql.handlers.header_handler import HeaderTableHandler
-from excel_to_sql.table_models import TableLocation
+from handlers.other_handler import OtherTableHandler
+from handlers.default_handler import DefaultTableHandler
+from handlers.header_handler import HeaderTableHandler
+from table_models import TableLocation
 
 
 class ExcelToSQLiteConverter:
@@ -261,7 +261,8 @@ class ExcelToSQLiteConverter:
         column_mapping = self.header_handler.get_column_mapping(header_sheet, table_loc)
         
         # Check if we found all required columns
-        required_columns = ['table_id', 'sheet_name', 'model']
+        # Note: table_id is now auto-generated, not read from Excel
+        required_columns = ['sheet_name', 'model']
         missing_columns = [col for col in required_columns if col not in column_mapping]
         
         if missing_columns:

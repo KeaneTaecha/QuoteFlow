@@ -56,7 +56,7 @@ def extract_product_flags_and_filter(product_string: str) -> Tuple[str, bool, bo
     has_wd = False
     has_ins = False
     filter_type = None
-    
+
     # First extract filter if present (filter comes after everything)
     if '+F.' in product:
         parts = product.split('+F.', 1)
@@ -69,7 +69,7 @@ def extract_product_flags_and_filter(product_string: str) -> Tuple[str, bool, bo
                 paren_index = filter_part.index('(')
                 remaining_part = filter_part[paren_index:]
                 product = product + remaining_part
-                filter_type = None
+                filter_type = filter_part[:paren_index].strip()
             else:
                 filter_type = filter_part
 
@@ -80,7 +80,7 @@ def extract_product_flags_and_filter(product_string: str) -> Tuple[str, bool, bo
     if "(WD)" in product:
         product = product.replace("(WD)", "").strip()
         has_wd = True
-        
+
     return product, has_wd, has_ins, filter_type
 
 

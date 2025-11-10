@@ -4,7 +4,7 @@ Handles Header sheet table detection and column identification using keyword rec
 """
 
 from typing import Optional, Dict, List, Tuple
-from excel_to_sql.table_models import TableLocation
+from table_models import TableLocation
 
 
 class HeaderTableHandler:
@@ -12,8 +12,8 @@ class HeaderTableHandler:
     
     def __init__(self):
         # Keywords for column detection
+        # Note: table_id is now auto-generated, not read from Excel
         self.column_keywords = {
-            'table_id': ['table id', 'table_id', 'id', 'table', 'tableid'],
             'sheet_name': ['sheet', 'sheet name', 'sheet_name', 'sheetname'],
             'model': ['model', 'models', 'product', 'product model'],
             'tb_modifier': ['tb modifier', 'tb_modifier', 'tb modifier equation', 'tb_modifier_equation', 'base price modifier', 'base_price_modifier', 'bp modifier', 'bp_modifier'],
@@ -179,10 +179,13 @@ class HeaderTableHandler:
         """Extract header data using the column mapping"""
         header_data = []
         
+        # Auto-generate table IDs starting from 1
+        table_id_counter = 1
+        
         # Extract data from each row
         for row in range(table_loc.start_row + 1, table_loc.end_row + 1):
             # Get values using column mapping
-            table_id = self._get_cell_value(sheet, row, column_mapping.get('table_id'))
+            # Note: table_id is now auto-generated, not read from Excel
             sheet_name = self._get_cell_value(sheet, row, column_mapping.get('sheet_name'))
             model = self._get_cell_value(sheet, row, column_mapping.get('model'))
             tb_modifier = self._get_cell_value(sheet, row, column_mapping.get('tb_modifier'))
@@ -190,8 +193,8 @@ class HeaderTableHandler:
             powder_coated_multiplier = self._get_cell_value(sheet, row, column_mapping.get('powder_coated'))
             wd_multiplier = self._get_cell_value(sheet, row, column_mapping.get('wd'))
             
-            # Skip rows with missing essential data
-            if table_id is None or sheet_name is None or model is None:
+            # Skip rows with missing essential data (table_id is no longer required from Excel)
+            if sheet_name is None or model is None:
                 continue
             
             # Parse models (comma-separated)
@@ -228,7 +231,7 @@ class HeaderTableHandler:
                 wd_multipliers.extend([wd_multipliers[-1]] * (len(models) - len(wd_multipliers)))
             
             entry = {
-                'table_id': int(table_id),
+                'table_id': table_id_counter,  # Auto-generated sequential ID
                 'sheet_name': str(sheet_name),
                 'models': models,
                 'tb_modifiers': tb_modifiers,
@@ -238,6 +241,7 @@ class HeaderTableHandler:
             }
             
             header_data.append(entry)
+            table_id_counter += 1  # Increment for next table
         
         return header_data
     

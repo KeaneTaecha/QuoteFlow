@@ -328,7 +328,7 @@ class ExcelItemImporter:
         )
         
         # Use WD from name if specified, otherwise use from database validation
-        has_wd = has_wd_from_name or has_wd_from_db
+        has_wd = has_wd_from_name or has_wd_from_db 
         
         if not product_exists:
             return {'success': False, 'error': error_msg or f'Product "{model}" not found in database'}
