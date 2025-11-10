@@ -24,7 +24,7 @@ jobs:
 
     - name: Build macOS application (OneDir)
       run: |
-        pyinstaller --onedir --windowed --name "QuoteFlow" --icon="assets/icon.icns" --add-data="src/ui:ui" --add-data="src/database:database" --add-data="src/excel_exporter.py:." --add-data="data/quotation_template.xlsx:data" --add-data="prices.db:." --add-data="assets:assets" --hidden-import="ui.quotation_ui" --hidden-import="database.price_loader" --hidden-import="database.getsql" --hidden-import="database.handlers.default_handler" --hidden-import="database.handlers.header_handler" --hidden-import="database.handlers.other_handler" --hidden-import="excel_exporter" --hidden-import="sqlite3" --hidden-import="openpyxl" src/main.py
+        pyinstaller --onedir --windowed --name "QuoteFlow" --icon="assets/icon.icns" --add-data="src/ui:ui" --add-data="src/excel_to_sql:excel_to_sql" --add-data="src/utils:utils" --add-data="data/quotation_template.xlsx:data" --add-data="prices.db:." --add-data="assets:assets" --hidden-import="ui.quotation_ui" --hidden-import="utils.price_calculator" --hidden-import="utils.sql_loader" --hidden-import="utils.equation_parser" --hidden-import="utils.filter_utils" --hidden-import="utils.product_utils" --hidden-import="utils.quote_utils" --hidden-import="utils.excel_exporter" --hidden-import="utils.excel_importer" --hidden-import="excel_to_sql.getsql" --hidden-import="excel_to_sql.handlers.default_handler" --hidden-import="excel_to_sql.handlers.header_handler" --hidden-import="excel_to_sql.handlers.other_handler" --hidden-import="sqlite3" --hidden-import="openpyxl" src/main.py
 
     - name: Package .app bundle for upload
       run: |
