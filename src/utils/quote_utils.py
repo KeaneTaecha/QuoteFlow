@@ -166,22 +166,20 @@ def build_quote_item(
         width_inches = convert_dimension_to_inches(width, width_unit)
         height_inches = convert_dimension_to_inches(height, height_unit)
         
+        # Check if height is greater than width - if so, swap them and show warning
+        if height_inches > width_inches:
+            # Swap the values and add warning
+            width_inches, height_inches = height_inches, width_inches
+            warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
+            # Store warning message separately (will be displayed like error messages)
+            # Don't add to detail field - it will be shown in product column
+        
         # Find the rounded height that matches database (for other tables, size is stored in height column)
         height_int = int(round(height_inches))
         rounded_height = price_loader.find_rounded_price_per_foot_width(product, height_int)
         
-        # Fallback: if lookup fails, try swapping width and height (user might have swapped them)
         if not rounded_height:
-            width_int = int(round(width_inches))
-            rounded_height = price_loader.find_rounded_price_per_foot_width(product, width_int)
-            if rounded_height:
-                # Swap worked, swap the values and add warning
-                width_inches, height_inches = height_inches, width_inches
-                warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
-                # Store warning message separately (will be displayed like error messages)
-                # Don't add to detail field - it will be shown in product column
-            else:
-                return None, f'Height {height_inches}" ({height_int}") not available in price list for {product}. Please check available heights in the database.'
+            return None, f'Height {height_inches}" ({height_int}") not available in price list for {product}. Please check available heights in the database.'
         
         # Get price using price_per_foot formula
         unit_price = price_loader.get_price_for_price_per_foot(
