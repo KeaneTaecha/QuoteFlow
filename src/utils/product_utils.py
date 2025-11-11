@@ -96,7 +96,7 @@ def convert_mm_to_inches(value_mm: float) -> float:
     Returns:
         Value in inches
     """
-    return value_mm / 25
+    return value_mm / 25.4
 
 
 def convert_dimension_to_inches(value: float, unit: str) -> float:
