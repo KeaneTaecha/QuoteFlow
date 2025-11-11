@@ -85,7 +85,7 @@ def build_quote_item(
         If successful: (quote_item_dict, None)
         If error: (None, error_message_string)
     """
-    has_warning = False  # Initialize warning flag
+    warning_message = None  # Initialize warning message
     
     if has_no_dimensions:
         # Handle products with no height/width - extract price_id first
@@ -177,12 +177,9 @@ def build_quote_item(
             if rounded_height:
                 # Swap worked, swap the values and add warning
                 width_inches, height_inches = height_inches, width_inches
-                has_warning = True
-                warning_msg = f'⚠ Warning: Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
-                if detail:
-                    detail = f'{detail}\n{warning_msg}'
-                else:
-                    detail = warning_msg
+                warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
+                # Store warning message separately (will be displayed like error messages)
+                # Don't add to detail field - it will be shown in product column
             else:
                 return None, f'Height {height_inches}" ({height_int}") not available in price list for {product}. Please check available heights in the database.'
         
@@ -346,9 +343,12 @@ def build_quote_item(
         'discounted_unit_price': discounted_unit_price,
         'total': total_price,
         'rounded_size': rounded_size,
-        'detail': detail,
-        'has_warning': has_warning
+        'detail': detail
     }
+    
+    # Add warning_message if warning exists (similar to error_message for invalid items)
+    if warning_message:
+        quote_item['warning_message'] = warning_message
     
     return quote_item, None
 

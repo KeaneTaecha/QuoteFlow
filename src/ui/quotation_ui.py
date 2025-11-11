@@ -924,6 +924,13 @@ class QuotationApp(QMainWindow):
             excel_item = item.copy()
             # Convert finish to Thai using the exporter's method
             excel_item['finish'] = self.excel_exporter.get_thai_finishing(item.get('finish', ''))
+            # Remove warning messages from detail field for Excel export
+            detail = excel_item.get('detail', '')
+            if detail:
+                # Remove warning messages (lines starting with "⚠ Warning:")
+                detail_lines = detail.split('\n')
+                cleaned_lines = [line for line in detail_lines if not line.strip().startswith('⚠ Warning:')]
+                excel_item['detail'] = '\n'.join(cleaned_lines).strip()
             items_for_excel.append(excel_item)
         
         # Get save file path
@@ -1621,6 +1628,42 @@ class QuotationApp(QMainWindow):
                         cell.setFont(font)
                 
                 item_counter += 1
+            elif item.get('warning_message'):
+                # Warning item row - show warning information (similar to errors but with yellow background)
+                self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
+                product_text = item['product_code']
+                product_text += f" (WARNING: {item.get('warning_message')})"
+                self.items_table.setItem(row, 1, QTableWidgetItem(product_text))
+                self.items_table.setItem(row, 2, QTableWidgetItem(item.get('detail', '')))  # Detail column
+                self.items_table.setItem(row, 3, QTableWidgetItem(item['finish']))
+                self.items_table.setItem(row, 4, QTableWidgetItem(item['size']))
+                self.items_table.setItem(row, 5, QTableWidgetItem(str(item['quantity'])))
+                
+                # Show original unit price
+                self.items_table.setItem(row, 6, QTableWidgetItem(f"฿ {item['unit_price']:,.2f}"))
+                
+                # Show discount percentage
+                discount_percent = item.get('discount', 0) * 100
+                if discount_percent > 0:
+                    self.items_table.setItem(row, 7, QTableWidgetItem(f"{discount_percent:.0f}%"))
+                else:
+                    self.items_table.setItem(row, 7, QTableWidgetItem("0%"))
+                
+                # Show total (after discount)
+                self.items_table.setItem(row, 8, QTableWidgetItem(f"฿ {item['total']:,.2f}"))
+                
+                # Style warning items with yellow background
+                for col in range(9):
+                    cell = self.items_table.item(row, col)
+                    if cell:
+                        cell.setBackground(QColor(255, 255, 200))  # Light yellow background
+                        font = cell.font()
+                        font.setPointSize(adjusted_font_size)
+                        cell.setFont(font)
+                
+                # Only add to grand total if not invalid
+                grand_total += item['total']
+                item_counter += 1
             else:
                 # Regular product row
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
@@ -1650,10 +1693,6 @@ class QuotationApp(QMainWindow):
                         font = cell.font()
                         font.setPointSize(adjusted_font_size)
                         cell.setFont(font)
-                        
-                        # Highlight warning items with yellow background
-                        if item.get('has_warning', False):
-                            cell.setBackground(QColor(255, 255, 200))  # Light yellow background
                 
                 # Only add to grand total if not invalid
                 if not item.get('is_invalid', False):
