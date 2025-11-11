@@ -10,7 +10,7 @@ from utils.price_calculator import PriceCalculator
 from utils.filter_utils import get_filter_price
 from utils.product_utils import (
     extract_product_flags_and_filter,
-    convert_dimension_to_inches, validate_product_exists,
+    validate_product_exists,
     extract_slot_number_from_model, get_product_type_flags
 )
 from utils.quote_utils import build_quote_item

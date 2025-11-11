@@ -265,9 +265,14 @@ def build_quote_item(
         width_inches = convert_dimension_to_inches(width, width_unit)
         height_inches = convert_dimension_to_inches(height, height_unit)
         
-        # Validate dimensions
+        # Check if height is greater than width - if so, swap them and show warning
         if height_inches > width_inches:
-            return None, f'Height must be less than width for {product}'
+            # Swap the values and add warning
+            width_inches, height_inches = height_inches, width_inches
+            # Also swap the original width/height and units for consistency
+            width, height = height, width
+            width_unit, height_unit = height_unit, width_unit
+            warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
         
         # Find rounded size and get price
         rounded_size = price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
