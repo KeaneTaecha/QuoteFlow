@@ -88,7 +88,7 @@ def convert_mm_to_inches(value_mm: float) -> float:
     """
     Convert millimeters to inches.
     
-    Note: Uses division by 25 (not 25.4) to match existing codebase behavior.
+    Note: Uses division by 25.4 (standard conversion factor).
     
     Args:
         value_mm: Value in millimeters

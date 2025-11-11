@@ -49,9 +49,10 @@ class PriceCalculator:
             Total price including base price plus hand gear addition
         """
         # Hand gear calculation: rounded up(height/1500) x rounded up(width/1500) x hand gear price
+        # Convert inches to mm using 25.4 factor
         hand_gear_price = 600
-        height_factor = math.ceil((height * 25) / 1500)
-        width_factor = math.ceil((width * 25) / 1500)
+        height_factor = math.ceil((height * 25.4) / 1500)
+        width_factor = math.ceil((width * 25.4) / 1500)
         hand_gear_addition = height_factor * width_factor * hand_gear_price
         return base_price + hand_gear_addition
     
