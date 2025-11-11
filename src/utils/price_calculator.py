@@ -173,7 +173,7 @@ class PriceCalculator:
     def get_price_for_price_per_foot(self, product, finish, width, height, with_damper=False, special_color_multiplier=1.0, price_id=None):
         """Get price for a product with price_per_foot pricing
         
-        Formula: Height × 0.0833333 × price_per_foot (matching width first)
+        Formula: (height / 12) × price_per_foot (matching width first)
         
         Args:
             product: Product model name
@@ -201,17 +201,19 @@ class PriceCalculator:
             return 0
         
         # Get price_per_foot
+        # Note: 'width' parameter is actually the size value stored in SQL height column
         if price_id is not None:
             price_per_foot = self.db.get_price_per_foot(table_id, 0, price_id)
         else:
-            width_int = int(width)
-            price_per_foot = self.db.get_price_per_foot(table_id, width_int)
+            size_int = int(width)  # This is the size from SQL height column
+            price_per_foot = self.db.get_price_per_foot(table_id, size_int)
         
         if price_per_foot is None:
             return 0
         
-        # Calculate base price: Height × 0.0833333 × price_per_foot
-        base_price = ((height*25)/1000) * 3.281 * price_per_foot
+        # Calculate base price: (height / 12) * price_per_foot
+        # Note: 'height' parameter is the dimension to multiply with price_per_foot
+        base_price = (height / 12) * price_per_foot
         
         # Apply finish multiplier
         finish_multiplier = 1.0

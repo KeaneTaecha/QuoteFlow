@@ -102,7 +102,7 @@ class PriceDatabase:
     
     def is_other_table(self, product: str) -> bool:
         """Check if a product uses other table format (diameter-based) instead of width/height"""
-        return self.check_product_condition(product, 'pr.height IS NULL')
+        return self.check_product_condition(product, 'pr.width IS NULL')
     
     def has_price_per_foot(self, product: str) -> bool:
         """Check if a product has price_per_foot pricing"""
@@ -260,7 +260,7 @@ class PriceDatabase:
         cursor.execute('''
             SELECT normal_price, price_with_damper
             FROM prices
-            WHERE table_id = ? AND height IS NULL AND width = ?
+            WHERE table_id = ? AND height = ? AND width IS NULL
         ''', (table_id, diameter))
         
         result = cursor.fetchone()
@@ -270,6 +270,8 @@ class PriceDatabase:
     
     def get_price_per_foot(self, table_id: int, width: int, price_id: Optional[int] = None) -> Optional[float]:
         """Get price_per_foot for given table_id and width, or by price_id
+        
+        Always uses height column to get size since price_per_foot products store size in height.
         
         Returns:
             price_per_foot value or None
@@ -290,8 +292,8 @@ class PriceDatabase:
             cursor.execute('''
                 SELECT price_per_foot
                 FROM prices
-                WHERE table_id = ? AND width = ? AND price_per_foot IS NOT NULL
-                ORDER BY width
+                WHERE table_id = ? AND height = ? AND price_per_foot IS NOT NULL
+                ORDER BY height
                 LIMIT 1
             ''', (table_id, width))
         
@@ -313,16 +315,16 @@ class PriceDatabase:
         return cursor.fetchone()
     
     def get_diameter_by_price_id(self, price_id: int) -> Optional[int]:
-        """Get diameter (width) for a price_id in other table format"""
+        """Get diameter (height) for a price_id in other table format"""
         conn = self.get_connection()
         if not conn:
             return None
         
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT width
+            SELECT height
             FROM prices
-            WHERE price_id = ? AND height IS NULL
+            WHERE price_id = ? AND width IS NULL
         ''', (price_id,))
         
         result = cursor.fetchone()
@@ -330,7 +332,10 @@ class PriceDatabase:
     
     # Size lookup queries
     def find_rounded_price_per_foot_width(self, product: str, width: int) -> Optional[int]:
-        """Find the exact match first, then the next available width that is >= the given width for price_per_foot products"""
+        """Find the exact match first, then the next available width that is >= the given width for price_per_foot products
+        
+        Always searches in height column since price_per_foot products store size in height.
+        """
         table_id = self.get_table_id(product)
         if table_id is None:
             return None
@@ -341,16 +346,15 @@ class PriceDatabase:
         
         cursor = conn.cursor()
         
-        # Find exact match first, then closest >= match
         cursor.execute('''
-            SELECT width,
+            SELECT height,
                    CASE 
-                       WHEN width = ? THEN 0
-                       ELSE width - ?
+                       WHEN height = ? THEN 0
+                       ELSE height - ?
                    END as priority
             FROM prices
-            WHERE table_id = ? AND price_per_foot IS NOT NULL AND width >= ?
-            ORDER BY priority, width
+            WHERE table_id = ? AND price_per_foot IS NOT NULL AND height >= ?
+            ORDER BY priority, height
             LIMIT 1
         ''', (width, width, table_id, width))
         
@@ -412,15 +416,15 @@ class PriceDatabase:
         
         # Single query: prioritize exact match, then closest >= match
         cursor.execute('''
-            SELECT pr.width,
+            SELECT pr.height,
                    CASE 
-                       WHEN pr.width = ? THEN 0
-                       ELSE pr.width - ?
+                       WHEN pr.height = ? THEN 0
+                       ELSE pr.height - ?
                    END as priority
             FROM products p
             JOIN prices pr ON p.table_id = pr.table_id
-            WHERE p.model = ? AND pr.height IS NULL AND pr.width >= ?
-            ORDER BY priority, pr.width
+            WHERE p.model = ? AND pr.height >= ? AND pr.width IS NULL
+            ORDER BY priority, pr.height
             LIMIT 1
         ''', (diameter, diameter, product, diameter))
         

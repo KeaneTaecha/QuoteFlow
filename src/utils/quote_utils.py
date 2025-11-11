@@ -85,6 +85,8 @@ def build_quote_item(
         If successful: (quote_item_dict, None)
         If error: (None, error_message_string)
     """
+    has_warning = False  # Initialize warning flag
+    
     if has_no_dimensions:
         # Handle products with no height/width - extract price_id first
         price_id = price_loader.get_price_id_for_no_dimensions(product)
@@ -164,15 +166,29 @@ def build_quote_item(
         width_inches = convert_dimension_to_inches(width, width_unit)
         height_inches = convert_dimension_to_inches(height, height_unit)
         
-        # Find the rounded width that matches database
-        width_int = int(round(width_inches))
-        rounded_width = price_loader.find_rounded_price_per_foot_width(product, width_int)
-        if not rounded_width:
-            return None, f'Width {width_inches}" ({width_int}") not available in price list for {product}. Please check available widths in the database.'
+        # Find the rounded height that matches database (for other tables, size is stored in height column)
+        height_int = int(round(height_inches))
+        rounded_height = price_loader.find_rounded_price_per_foot_width(product, height_int)
+        
+        # Fallback: if lookup fails, try swapping width and height (user might have swapped them)
+        if not rounded_height:
+            width_int = int(round(width_inches))
+            rounded_height = price_loader.find_rounded_price_per_foot_width(product, width_int)
+            if rounded_height:
+                # Swap worked, swap the values and add warning
+                width_inches, height_inches = height_inches, width_inches
+                has_warning = True
+                warning_msg = f'⚠ Warning: Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
+                if detail:
+                    detail = f'{detail}\n{warning_msg}'
+                else:
+                    detail = warning_msg
+            else:
+                return None, f'Height {height_inches}" ({height_int}") not available in price list for {product}. Please check available heights in the database.'
         
         # Get price using price_per_foot formula
         unit_price = price_loader.get_price_for_price_per_foot(
-            product, finish, rounded_width, height_inches, has_wd, special_color_multiplier
+            product, finish, rounded_height, width_inches, has_wd, special_color_multiplier
         )
         if unit_price == 0:
             return None, f'Price not available for {product}'
@@ -204,7 +220,7 @@ def build_quote_item(
                 original_size = f'{width_str} x {height_str}'
         
         # Store rounded size for display
-        rounded_size = f'{rounded_width}" x {height_inches}"'
+        rounded_size = f'{width_inches}" x {rounded_height}"'
         
     elif is_other_table:
         # Handle diameter-based products
@@ -330,7 +346,8 @@ def build_quote_item(
         'discounted_unit_price': discounted_unit_price,
         'total': total_price,
         'rounded_size': rounded_size,
-        'detail': detail
+        'detail': detail,
+        'has_warning': has_warning
     }
     
     return quote_item, None

@@ -150,17 +150,16 @@ class OtherTableHandler:
         if price_per_foot_col is None and not valid_price_cols:
             return 0
         
-        # Second pass: collect prices for each width
-        height = None
+        # Second pass: collect prices for each height
         step = 2 if is_separated else 1
         end_row = table_loc.end_row + 1 if not is_separated else table_loc.end_row
         
         for row in range(table_loc.width_row, end_row, step):
             cell_value = sheet.cell(row, table_loc.start_col).value
-            width = self._get_width_value(cell_value, model_names)
-            # If width column contains model name, width will be None (saved as NULL in database)
+            height = self._get_width_value(cell_value, model_names)
+            # If width column contains model name, height will be None (saved as NULL in database)
             
-            # Collect all price values for this width
+            # Collect all price values for this height
             normal_price = None
             damper_price = None
             price_per_foot = None
@@ -192,7 +191,7 @@ class OtherTableHandler:
                         INSERT OR REPLACE INTO prices 
                         (table_id, height, width, normal_price, price_with_damper, price_per_foot)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (table_id, None, width, normal_price, damper_price, price_per_foot))
+                    ''', (table_id, height, None, normal_price, damper_price, price_per_foot))
                     price_count += 1
             except Exception:
                 continue

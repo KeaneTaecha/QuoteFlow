@@ -1333,19 +1333,31 @@ class QuotationApp(QMainWindow):
             width_inches = convert_dimension_to_inches(width, unit)
             height_inches = convert_dimension_to_inches(height, unit)
             
-            # Find the rounded width that matches database
-            rounded_width = self.price_loader.find_rounded_price_per_foot_width(product, width_inches)
-            if not rounded_width:
-                self.unit_price_label.setText('N/A')
-                self.total_price_label.setText('฿ 0.00')
-                self.rounded_size_label.setText('N/A')
-                return
+            # Find the rounded height that matches database (for other tables, size is stored in height column)
+            rounded_height = self.price_loader.find_rounded_price_per_foot_width(product, height_inches)
+            
+            # Fallback: if lookup fails, try swapping width and height (user might have swapped them)
+            if not rounded_height:
+                rounded_height = self.price_loader.find_rounded_price_per_foot_width(product, width_inches)
+                if rounded_height:
+                    # Swap worked, swap the values and show warning
+                    width_inches, height_inches = height_inches, width_inches
+                    QMessageBox.warning(
+                        self,
+                        'Dimensions Swapped',
+                        f'⚠ Warning: Width and height appear to be swapped.\nUsing {width_inches}" x {height_inches}" instead.'
+                    )
+                else:
+                    self.unit_price_label.setText('N/A')
+                    self.total_price_label.setText('฿ 0.00')
+                    self.rounded_size_label.setText('N/A')
+                    return
             
             # Display the rounded width and height
-            self.rounded_size_label.setText(f'{rounded_width}" x {height_inches}"')
+            self.rounded_size_label.setText(f'{width_inches}" x {rounded_height}"')
             
-            # Get price using price_per_foot formula: Height × 0.0833333 × price_per_foot
-            unit_price = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_width, height_inches, with_damper, special_color_multiplier)
+            # Get price using price_per_foot formula: (width / 12) × price_per_foot
+            unit_price = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier)
         elif is_other_table:
             # Handle other table products
             size = self.other_table_spin.value()
@@ -1631,13 +1643,17 @@ class QuotationApp(QMainWindow):
                 # Show total (after discount)
                 self.items_table.setItem(row, 8, QTableWidgetItem(f"฿ {item['total']:,.2f}"))
                 
-                # Apply font size to all cells in this row
+                # Apply font size and styling to all cells in this row
                 for col in range(9):
                     cell = self.items_table.item(row, col)
                     if cell:
                         font = cell.font()
                         font.setPointSize(adjusted_font_size)
                         cell.setFont(font)
+                        
+                        # Highlight warning items with yellow background
+                        if item.get('has_warning', False):
+                            cell.setBackground(QColor(255, 255, 200))  # Light yellow background
                 
                 # Only add to grand total if not invalid
                 if not item.get('is_invalid', False):
