@@ -42,143 +42,148 @@ class ExcelItemImporter:
         if progress_callback:
             progress_callback(5, 'Loading Excel file...')
         
-        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-        sheet = wb.active  # Use the first/active sheet
-        
-        if progress_callback:
-            progress_callback(10, 'Searching for header row...')
-        
-        # Find header row by searching for keywords
-        header_row = None
-        column_mapping = {}
-        
-        # Search for header row (search first 20 rows)
-        for row in range(1, min(21, sheet.max_row + 1)):
-            # Check all columns in this row for header keywords
-            row_mapping = {}
-            for col in range(1, sheet.max_column + 1):
-                cell_value = sheet.cell(row, col).value
-                if cell_value is None:
+        wb = None
+        try:
+            wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+            sheet = wb.active  # Use the first/active sheet
+            
+            if progress_callback:
+                progress_callback(10, 'Searching for header row...')
+            
+            # Find header row by searching for keywords
+            header_row = None
+            column_mapping = {}
+            
+            # Search for header row (search first 20 rows)
+            for row in range(1, min(21, sheet.max_row + 1)):
+                # Check all columns in this row for header keywords
+                row_mapping = {}
+                for col in range(1, sheet.max_column + 1):
+                    cell_value = sheet.cell(row, col).value
+                    if cell_value is None:
+                        continue
+                    
+                    cell_str = str(cell_value).strip().lower()
+                    
+                    # Check for keywords
+                    if 'model' in cell_str and 'model' not in row_mapping:
+                        row_mapping['model'] = col
+                    elif 'detail' in cell_str and 'detail' not in row_mapping:
+                        row_mapping['detail'] = col
+                    elif 'width' in cell_str and 'width' not in row_mapping:
+                        row_mapping['width'] = col
+                    elif 'height' in cell_str and 'height' not in row_mapping:
+                        row_mapping['height'] = col
+                    elif 'unit' in cell_str and 'unit' not in row_mapping:
+                        row_mapping['unit'] = col
+                    elif 'quantity' in cell_str and 'quantity' not in row_mapping:
+                        row_mapping['quantity'] = col
+                    elif 'finish' in cell_str and 'finish' not in row_mapping:
+                        row_mapping['finish'] = col
+                    elif 'discount' in cell_str and 'discount' not in row_mapping:
+                        row_mapping['discount'] = col
+                
+                # If we found Model column and at least a few other columns, use this row
+                if 'model' in row_mapping and len(row_mapping) >= 2:
+                    header_row = row
+                    column_mapping = row_mapping
+                    break
+            
+            if header_row is None or 'model' not in column_mapping:
+                raise ValueError("Could not find required 'Model' column in Excel file")
+            
+            # Extract items from rows below header
+            items = []
+            model_col = column_mapping.get('model')
+            detail_col = column_mapping.get('detail')
+            width_col = column_mapping.get('width')
+            height_col = column_mapping.get('height')
+            unit_col = column_mapping.get('unit')
+            quantity_col = column_mapping.get('quantity')
+            finish_col = column_mapping.get('finish')
+            discount_col = column_mapping.get('discount')
+            
+            # Calculate total rows to process
+            total_rows = sheet.max_row - header_row
+            processed_rows = 0
+            
+            # Process rows below header
+            for row in range(header_row + 1, sheet.max_row + 1):
+                model_value = self._get_cell_value(sheet, row, model_col)
+                
+                # Skip empty rows
+                if model_value is None or str(model_value).strip() == '':
+                    processed_rows += 1
+                    # Update progress every 10 rows or at the end
+                    if progress_callback and total_rows > 0 and (processed_rows % 10 == 0 or processed_rows == total_rows):
+                        progress = 15 + int((processed_rows / total_rows) * 85)  # 15% to 100% internal
+                        progress = min(progress, 100)
+                        progress_callback(progress, f'Reading row {row} of {sheet.max_row}...')
                     continue
                 
-                cell_str = str(cell_value).strip().lower()
+                model_str = str(model_value).strip()
                 
-                # Check for keywords
-                if 'model' in cell_str and 'model' not in row_mapping:
-                    row_mapping['model'] = col
-                elif 'detail' in cell_str and 'detail' not in row_mapping:
-                    row_mapping['detail'] = col
-                elif 'width' in cell_str and 'width' not in row_mapping:
-                    row_mapping['width'] = col
-                elif 'height' in cell_str and 'height' not in row_mapping:
-                    row_mapping['height'] = col
-                elif 'unit' in cell_str and 'unit' not in row_mapping:
-                    row_mapping['unit'] = col
-                elif 'quantity' in cell_str and 'quantity' not in row_mapping:
-                    row_mapping['quantity'] = col
-                elif 'finish' in cell_str and 'finish' not in row_mapping:
-                    row_mapping['finish'] = col
-                elif 'discount' in cell_str and 'discount' not in row_mapping:
-                    row_mapping['discount'] = col
-            
-            # If we found Model column and at least a few other columns, use this row
-            if 'model' in row_mapping and len(row_mapping) >= 2:
-                header_row = row
-                column_mapping = row_mapping
-                break
-        
-        if header_row is None or 'model' not in column_mapping:
-            raise ValueError("Could not find required 'Model' column in Excel file")
-        
-        # Extract items from rows below header
-        items = []
-        model_col = column_mapping.get('model')
-        detail_col = column_mapping.get('detail')
-        width_col = column_mapping.get('width')
-        height_col = column_mapping.get('height')
-        unit_col = column_mapping.get('unit')
-        quantity_col = column_mapping.get('quantity')
-        finish_col = column_mapping.get('finish')
-        discount_col = column_mapping.get('discount')
-        
-        # Calculate total rows to process
-        total_rows = sheet.max_row - header_row
-        processed_rows = 0
-        
-        # Process rows below header
-        for row in range(header_row + 1, sheet.max_row + 1):
-            model_value = self._get_cell_value(sheet, row, model_col)
-            
-            # Skip empty rows
-            if model_value is None or str(model_value).strip() == '':
+                # Get other column values
+                detail_value = self._get_cell_value(sheet, row, detail_col) if detail_col else None
+                width_value = self._get_cell_value(sheet, row, width_col) if width_col else None
+                height_value = self._get_cell_value(sheet, row, height_col) if height_col else None
+                unit_value = self._get_cell_value(sheet, row, unit_col) if unit_col else None
+                quantity_value = self._get_cell_value(sheet, row, quantity_col) if quantity_col else None
+                finish_value = self._get_cell_value(sheet, row, finish_col) if finish_col else None
+                discount_value = self._get_cell_value(sheet, row, discount_col) if discount_col else None
+                
+                # Check if this is a title (Model has text but other columns are empty)
+                has_detail = detail_value is not None and str(detail_value).strip() != ''
+                has_width = width_value is not None and str(width_value).strip() != ''
+                has_height = height_value is not None and str(height_value).strip() != ''
+                has_quantity = quantity_value is not None and str(quantity_value).strip() != ''
+                has_finish = finish_value is not None and str(finish_value).strip() != ''
+                
+                if not has_detail and not has_width and not has_height and not has_quantity and not has_finish:
+                    # This is a title
+                    items.append({
+                        'is_title': True,
+                        'title': model_str,
+                        'product_code': '',
+                        'size': '',
+                        'finish': '',
+                        'quantity': 0,
+                        'unit_price': 0,
+                        'discount': 0,
+                        'discounted_unit_price': 0,
+                        'total': 0,
+                        'rounded_size': None,
+                        'detail': ''
+                    })
+                else:
+                    # This is a product item
+                    item = {
+                        'model': model_str,
+                        'detail': str(detail_value).strip() if detail_value else '',
+                        'width': width_value,
+                        'height': height_value,
+                        'unit': str(unit_value).strip().lower() if unit_value else 'inches',
+                        'quantity': self._parse_number(quantity_value) if quantity_value else 1,
+                        'finish': str(finish_value).strip() if finish_value else None,
+                        'discount': self._parse_discount(discount_value) if discount_value else 0.0
+                    }
+                    items.append(item)
+                
                 processed_rows += 1
                 # Update progress every 10 rows or at the end
                 if progress_callback and total_rows > 0 and (processed_rows % 10 == 0 or processed_rows == total_rows):
                     progress = 15 + int((processed_rows / total_rows) * 85)  # 15% to 100% internal
                     progress = min(progress, 100)
                     progress_callback(progress, f'Reading row {row} of {sheet.max_row}...')
-                continue
             
-            model_str = str(model_value).strip()
+            if progress_callback:
+                progress_callback(100, 'Parsing complete!')
             
-            # Get other column values
-            detail_value = self._get_cell_value(sheet, row, detail_col) if detail_col else None
-            width_value = self._get_cell_value(sheet, row, width_col) if width_col else None
-            height_value = self._get_cell_value(sheet, row, height_col) if height_col else None
-            unit_value = self._get_cell_value(sheet, row, unit_col) if unit_col else None
-            quantity_value = self._get_cell_value(sheet, row, quantity_col) if quantity_col else None
-            finish_value = self._get_cell_value(sheet, row, finish_col) if finish_col else None
-            discount_value = self._get_cell_value(sheet, row, discount_col) if discount_col else None
-            
-            # Check if this is a title (Model has text but other columns are empty)
-            has_detail = detail_value is not None and str(detail_value).strip() != ''
-            has_width = width_value is not None and str(width_value).strip() != ''
-            has_height = height_value is not None and str(height_value).strip() != ''
-            has_quantity = quantity_value is not None and str(quantity_value).strip() != ''
-            has_finish = finish_value is not None and str(finish_value).strip() != ''
-            
-            if not has_detail and not has_width and not has_height and not has_quantity and not has_finish:
-                # This is a title
-                items.append({
-                    'is_title': True,
-                    'title': model_str,
-                    'product_code': '',
-                    'size': '',
-                    'finish': '',
-                    'quantity': 0,
-                    'unit_price': 0,
-                    'discount': 0,
-                    'discounted_unit_price': 0,
-                    'total': 0,
-                    'rounded_size': None,
-                    'detail': ''
-                })
-            else:
-                # This is a product item
-                item = {
-                    'model': model_str,
-                    'detail': str(detail_value).strip() if detail_value else '',
-                    'width': width_value,
-                    'height': height_value,
-                    'unit': str(unit_value).strip().lower() if unit_value else 'inches',
-                    'quantity': self._parse_number(quantity_value) if quantity_value else 1,
-                    'finish': str(finish_value).strip() if finish_value else None,
-                    'discount': self._parse_discount(discount_value) if discount_value else 0.0
-                }
-                items.append(item)
-            
-            processed_rows += 1
-            # Update progress every 10 rows or at the end
-            if progress_callback and total_rows > 0 and (processed_rows % 10 == 0 or processed_rows == total_rows):
-                progress = 15 + int((processed_rows / total_rows) * 85)  # 15% to 100% internal
-                progress = min(progress, 100)
-                progress_callback(progress, f'Reading row {row} of {sheet.max_row}...')
-        
-        if progress_callback:
-            progress_callback(100, 'Parsing complete!')
-        
-        wb.close()
-        return items
+            return items
+        finally:
+            # Always close the workbook, even if an exception occurred
+            if wb is not None:
+                wb.close()
     
     def _get_cell_value(self, sheet, row, col):
         """Get cell value safely, returning None if cell doesn't exist"""
