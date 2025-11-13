@@ -419,16 +419,20 @@ class ExcelItemImporter:
         finish_str = str(finish_from_excel).strip()
         finish_lower = finish_str.lower()
         
-        # Define keywords for each finish type
-        powder_keywords = ['ขาวนวล', 'ขาวเงา', 'ขาวด้าน', 'ขาวบริสุทธิ์', 'ดำเงา', 'ดำด้าน', 'บรอนส์', 'สีอบขาว', 'powder', 'coated']
+        # Define powder coated sub-colors that should return "Powder Coated - sub color"
+        colors = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์']
+        
+        # Define keywords for each finish type (includes sub-colors and general keywords)
+        powder_keywords = ['ขาวนวล', 'ขาวเงา', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ขาวบริสุทธิ์', 'ดำเงา', 'ดำด้าน', 'บรอนส์', 'บรอนซ์', 'สีอบขาว', 'powder', 'coated']
         anodized_keywords = ['anodized', 'aluminum', 'anodized aluminum', 'anodised', 'aluminium', 'anodised aluminium', 'สีอลูมิเนียม']
         
         
         # Check for Powder Coated
         if any(keyword in finish_lower for keyword in powder_keywords):
             if 'Powder Coated' in finishes:
-                if finish_str.strip() in powder_keywords:
-                    return (f"Powder Coated - {finish_str.strip()}", 1.0)
+                # Check if this is a specific sub-color that should return "Powder Coated - sub color"
+                if finish_str in colors:
+                    return (f"Powder Coated - {finish_str}", 1.0)
                 else:
                     return ('Powder Coated', 1.0)
             else:
@@ -447,7 +451,7 @@ class ExcelItemImporter:
         else:
             if 'Special Color' in finishes:
                 # Extract multiplier if present (format: "Color, Multiplier")
-                multiplier = 1.0
+                multiplier = 1.45
                 color_name = finish_str
                 if ',' in finish_str:
                     parts = finish_str.split(',', 1)

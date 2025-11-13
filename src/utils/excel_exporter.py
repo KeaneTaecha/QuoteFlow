@@ -86,18 +86,28 @@ class ExcelQuotationExporter:
         return result
     
     def get_thai_finishing(self, finish):
-        """Convert English finishing name to Thai"""
+        """Convert English finishing name to Thai
+        
+        Raises:
+            ValueError: If "Powder Coated" or "Special Color" is in finish but no sub-color is specified (no " - " separator)
+        """
         if 'Anodized' in finish:
             return 'สีอลูมิเนียม'
         elif 'Powder Coated' in finish:
-            return 'สีอบขาว'
+            # Check if there's a sub-color after "Powder Coated - "
+            if ' - ' in finish:
+                sub_color = finish.split(' - ', 1)[1]
+                # Return the sub-color directly (already in Thai)
+                return sub_color
+            else:
+                raise ValueError(f'Powder Coated finish must include a sub-color. Finish: "{finish}"')
         elif 'Special Color' in finish:
-            # Extract the multiplier from "Special Color - X.X" format
+            # Extract the color name from "Special Color - ColorName" format
             if ' - ' in finish:
                 color = finish.split(' - ', 1)[1]
                 return color
             else:
-                return 'สีพิเศษ'  # Default special color
+                raise ValueError(f'Special Color finish must include a color name. Finish: "{finish}"')
         else:
             return finish  # Return original if no match
     

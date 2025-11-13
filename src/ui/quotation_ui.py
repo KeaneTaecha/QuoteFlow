@@ -504,12 +504,12 @@ class QuotationApp(QMainWindow):
         self.powder_color_combo = QComboBox()
         self.powder_color_combo.addItems([
             'ขาวนวล',
-            'ขาวเงา',
             'ขาวด้าน',
-            'ขาวบริสุทธิ์',
-            'ดำเงา',
+            'ขาวฟ้า',
+            'ขาวควันบุหรี่',
             'ดำด้าน',
-            'บรอนส์'
+            'ดำเงา',
+            'บรอนซ์'
         ])
         self.powder_color_combo.currentTextChanged.connect(self.on_selection_changed)
         self.powder_color_layout.addWidget(self.powder_color_combo)
@@ -921,17 +921,21 @@ class QuotationApp(QMainWindow):
         # Prepare items with proper Thai finish names
         items_for_excel = []
         for item in self.quote_items:
-            excel_item = item.copy()
-            # Convert finish to Thai using the exporter's method
-            excel_item['finish'] = self.excel_exporter.get_thai_finishing(item.get('finish', ''))
-            # Remove warning messages from detail field for Excel export
-            detail = excel_item.get('detail', '')
-            if detail:
-                # Remove warning messages (lines starting with "⚠ Warning:")
-                detail_lines = detail.split('\n')
-                cleaned_lines = [line for line in detail_lines if not line.strip().startswith('⚠ Warning:')]
-                excel_item['detail'] = '\n'.join(cleaned_lines).strip()
-            items_for_excel.append(excel_item)
+            try:
+                excel_item = item.copy()
+                # Convert finish to Thai using the exporter's method
+                excel_item['finish'] = self.excel_exporter.get_thai_finishing(item.get('finish', ''))
+                # Remove warning messages from detail field for Excel export
+                detail = excel_item.get('detail', '')
+                if detail:
+                    # Remove warning messages (lines starting with "⚠ Warning:")
+                    detail_lines = detail.split('\n')
+                    cleaned_lines = [line for line in detail_lines if not line.strip().startswith('⚠ Warning:')]
+                    excel_item['detail'] = '\n'.join(cleaned_lines).strip()
+                items_for_excel.append(excel_item)
+            except ValueError as e:
+                QMessageBox.critical(self, 'Error', f'Cannot export quotation:\n\n{str(e)}\n\nPlease ensure all Powder Coated and Special Color finishes include color name.')
+                return
         
         # Get save file path
         file_name, _ = QFileDialog.getSaveFileName(
