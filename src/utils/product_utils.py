@@ -105,17 +105,26 @@ def convert_dimension_to_inches(value: float, unit: str) -> float:
     
     Args:
         value: The dimension value
-        unit: Unit string ('Millimeters', 'millimeters', 'mm', 'Inches', 'inches', etc.)
+        unit: Unit string ('Millimeters', 'millimeters', 'mm', 'Inches', 'inches', '"', etc.)
         
     Returns:
         Value in inches
+        
+    Raises:
+        ValueError: If the unit is not recognized (not inches or millimeters)
     """
-    unit_lower = str(unit).lower()
+    unit_lower = str(unit).lower().strip()
+    
+    # Check for millimeters
     if 'mm' in unit_lower or 'millimeter' in unit_lower:
         return convert_mm_to_inches(value)
-    else:
-        # Already in inches
+    
+    # Check for inches (including quote symbol)
+    if 'inch' in unit_lower or unit_lower == '"' or unit_lower == 'in':
         return value
+    
+    # If unit is not recognized, raise an error
+    raise ValueError(f'Incompatible unit "{unit}". Supported units are: inches (or "), millimeters (or mm)')
 
 
 def find_matching_product(product: str, available_models: List[str], 

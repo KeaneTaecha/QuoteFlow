@@ -98,9 +98,9 @@ class ExcelQuotationExporter:
         elif 'Powder Coated' in finish:
             # Check if there's a sub-color after "Powder Coated - "
             if ' - ' in finish:
-                sub_color = finish.split(' - ', 1)[1]
+                color = finish.split(' - ', 1)[1]
                 # Return the sub-color directly (already in Thai)
-                return sub_color
+                return color
             else:
                 raise ValueError(f'Powder Coated finish must include a sub-color. Finish: "{finish}"')
         elif 'Special Color' in finish:

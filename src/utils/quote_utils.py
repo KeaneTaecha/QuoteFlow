@@ -100,7 +100,10 @@ def build_quote_item(
             if height is None:
                 return None, f'Height is required for price_per_foot product {product}'
             
-            height_inches = convert_dimension_to_inches(height, height_unit)
+            try:
+                height_inches = convert_dimension_to_inches(height, height_unit)
+            except ValueError as e:
+                return None, str(e)
             unit_price = price_loader.get_price_for_price_per_foot(
                 product, finish, 0, height_inches, has_wd, special_color_multiplier, price_id=price_id
             )
@@ -133,7 +136,10 @@ def build_quote_item(
                     original_size = f"Slot x {height}mm"
             else:
                 # height_unit is inches
-                height_inches = convert_dimension_to_inches(height, height_unit)
+                try:
+                    height_inches = convert_dimension_to_inches(height, height_unit)
+                except ValueError as e:
+                    return None, str(e)
                 if slot_number:
                     original_size = f"{slot_number}Slot x {height_inches}\""
                 else:
@@ -163,8 +169,11 @@ def build_quote_item(
             return None, f'Width and height required for price_per_foot product {product}'
         
         # Convert to inches if needed
-        width_inches = convert_dimension_to_inches(width, width_unit)
-        height_inches = convert_dimension_to_inches(height, height_unit)
+        try:
+            width_inches = convert_dimension_to_inches(width, width_unit)
+            height_inches = convert_dimension_to_inches(height, height_unit)
+        except ValueError as e:
+            return None, str(e)
         
         # Check if height is greater than width - if so, swap them and show warning
         if height_inches > width_inches:
@@ -223,7 +232,10 @@ def build_quote_item(
             return None, f'Size required for other_table product {product}'
         
         # Convert to inches if needed
-        size_inches = convert_dimension_to_inches(size, size_unit)
+        try:
+            size_inches = convert_dimension_to_inches(size, size_unit)
+        except ValueError as e:
+            return None, str(e)
         
         # Find rounded size and get price
         rounded_size = price_loader.find_rounded_other_table_size(product, finish, size_inches)
@@ -262,8 +274,11 @@ def build_quote_item(
             return None, f'Width and height required for {product}'
         
         # Convert to inches if needed
-        width_inches = convert_dimension_to_inches(width, width_unit)
-        height_inches = convert_dimension_to_inches(height, height_unit)
+        try:
+            width_inches = convert_dimension_to_inches(width, width_unit)
+            height_inches = convert_dimension_to_inches(height, height_unit)
+        except ValueError as e:
+            return None, str(e)
         
         # Check if height is greater than width - if so, swap them and show warning
         if height_inches > width_inches:

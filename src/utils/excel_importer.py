@@ -320,10 +320,16 @@ class ExcelItemImporter:
         finish_from_excel = item_data.get('finish')  # Finish from Excel file
         discount = item_data.get('discount', 0.0)  # Discount percentage (0-100), default 0
         
-        # Determine default unit (inches or millimeters)
-        default_unit = 'inches'
-        if 'mm' in unit_str or 'millimeter' in unit_str:
+        # Determine default unit (inches or millimeters) - validate unit is compatible
+        unit_str_lower = str(unit_str).lower().strip()
+        if 'mm' in unit_str_lower or 'millimeter' in unit_str_lower:
             default_unit = 'millimeters'
+        elif 'inch' in unit_str_lower or unit_str_lower == '"' or unit_str_lower == 'in' or unit_str_lower == '':
+            # Empty string defaults to inches (for backward compatibility when unit column is empty)
+            default_unit = 'inches'
+        else:
+            # Unit is provided but not compatible - raise error
+            return {'success': False, 'error': f'Incompatible unit "{unit_str}". Supported units are: inches (or "), millimeters (or mm)'}
         
         # Extract filter suffix, WD, and INS if present
         # Use combined extraction to handle WD, INS, and filter
