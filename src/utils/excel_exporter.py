@@ -216,6 +216,14 @@ class ExcelQuotationExporter:
             
                 # Parse size - G(Height) H(x) I(Width) J(Unit) - only for regular items
                 size = item.get('size', '')
+                rounded_size = item.get('rounded_size', '')
+                
+                # Check if this is an other_table product (diameter-based)
+                # other_table products have rounded_size containing "diameter" or size without "x"
+                is_other_table = (
+                    'diameter' in str(rounded_size).lower() or 
+                    (size and 'x' not in size and size.strip())
+                )
                 
                 def parse_dimension(value_str, field_name):
                     """Parse dimension value and detect unit. Returns (numeric_value, unit_string)."""
@@ -247,60 +255,87 @@ class ExcelQuotationExporter:
                         # No explicit unit - default to mm if value > 100, otherwise inches
                         return numeric_value, 'mm' if numeric_value > 100 else '"'
                 
-                parts = size.split('x')
-                if len(parts) != 2:
-                    raise ValueError(f"Invalid size format (expected 'WIDTH x HEIGHT'): '{size}'")
-                
-                width_part = parts[0].strip()
-                height_part = parts[1].strip()
-                
-                # Check if width contains "Slot" - preserve it in display
-                has_slot = 'Slot' in width_part or 'slot' in width_part
-                
-                width_val, width_unit = parse_dimension(width_part, 'width')
-                height_val, height_unit = parse_dimension(height_part, 'height')
-                
-                # Helper to format numbers (remove .0 for whole numbers)
-                def format_number(num):
-                    return int(num) if num == int(num) else num
-                
-                # Display logic: if same unit, show numbers only; if different, show units after numbers
-                # Special handling for "Slot" in width
-                if has_slot:
-                    # Slot has no unit, always display as "7Slot" format
-                    width_display = f'{format_number(width_val)}Slot'
-                    # Use height unit for unit_display since Slot has no unit
-                    if height_unit == '"':
-                        height_display = format_number(height_val)
-                        unit_display = 'in'  # Height is in inches
+                # Handle other_table products (diameter-based) differently
+                if is_other_table:
+                    # For other_table products, size is just the diameter (e.g., "6.0" or "6.0"")
+                    # Parse it as a single dimension
+                    diameter_val, diameter_unit = parse_dimension(size, 'diameter')
+                    
+                    # Helper to format numbers (remove .0 for whole numbers)
+                    def format_number(num):
+                        return int(num) if num == int(num) else num
+                    
+                    # Display diameter in height column (G), leave width column (I) empty or show "x"
+                    # Format: diameter in G, "x" in H, empty in I, unit in J
+                    if diameter_unit == '"':
+                        diameter_display = format_number(diameter_val)
+                        unit_display = 'in'
                     else:
-                        height_display = format_number(height_val)
-                        unit_display = 'mm'  # Height is in mm
-                elif width_unit == height_unit:
-                    # Same unit: show numbers only, put unit in column J
-                    width_display = format_number(width_val)
-                    height_display = format_number(height_val)
-                    unit_display = 'mm' if width_unit == 'mm' else 'in'
+                        diameter_display = format_number(diameter_val)
+                        unit_display = 'mm'
+                    
+                    # For other_table, we might want to show diameter in a specific way
+                    # Based on the template, we'll put diameter in height column (G)
+                    self._safe_set_cell_value(f'G{current_row}', diameter_display, normal_font, center_alignment)
+                    self._safe_set_cell_value(f'H{current_row}', '', normal_font, center_alignment)  # Empty for diameter
+                    self._safe_set_cell_value(f'I{current_row}', '', normal_font, center_alignment)  # Empty for diameter
+                    self._safe_set_cell_value(f'J{current_row}', unit_display, normal_font, center_alignment)
                 else:
-                    # Different units: show units after numbers, leave column J empty
-                    # For inches, we need to store as string with " symbol
-                    # For mm, store as numeric value to avoid "number stored as text" warning
-                    if width_unit == '"':
-                        width_display = f'{format_number(width_val)}"'
-                    else:
+                    # Regular products with WIDTH x HEIGHT format
+                    parts = size.split('x')
+                    if len(parts) != 2:
+                        raise ValueError(f"Invalid size format (expected 'WIDTH x HEIGHT'): '{size}'")
+                    
+                    width_part = parts[0].strip()
+                    height_part = parts[1].strip()
+                    
+                    # Check if width contains "Slot" - preserve it in display
+                    has_slot = 'Slot' in width_part or 'slot' in width_part
+                    
+                    width_val, width_unit = parse_dimension(width_part, 'width')
+                    height_val, height_unit = parse_dimension(height_part, 'height')
+                    
+                    # Helper to format numbers (remove .0 for whole numbers)
+                    def format_number(num):
+                        return int(num) if num == int(num) else num
+                    
+                    # Display logic: if same unit, show numbers only; if different, show units after numbers
+                    # Special handling for "Slot" in width
+                    if has_slot:
+                        # Slot has no unit, always display as "7Slot" format
+                        width_display = f'{format_number(width_val)}Slot'
+                        # Use height unit for unit_display since Slot has no unit
+                        if height_unit == '"':
+                            height_display = format_number(height_val)
+                            unit_display = 'in'  # Height is in inches
+                        else:
+                            height_display = format_number(height_val)
+                            unit_display = 'mm'  # Height is in mm
+                    elif width_unit == height_unit:
+                        # Same unit: show numbers only, put unit in column J
                         width_display = format_number(width_val)
-                    
-                    if height_unit == '"':
-                        height_display = f'{format_number(height_val)}"'
-                    else:
                         height_display = format_number(height_val)
+                        unit_display = 'mm' if width_unit == 'mm' else 'in'
+                    else:
+                        # Different units: show units after numbers, leave column J empty
+                        # For inches, we need to store as string with " symbol
+                        # For mm, store as numeric value to avoid "number stored as text" warning
+                        if width_unit == '"':
+                            width_display = f'{format_number(width_val)}"'
+                        else:
+                            width_display = format_number(width_val)
+                        
+                        if height_unit == '"':
+                            height_display = f'{format_number(height_val)}"'
+                        else:
+                            height_display = format_number(height_val)
+                        
+                        unit_display = 'mm'
                     
-                    unit_display = 'mm'
-                
-                self._safe_set_cell_value(f'G{current_row}', width_display, normal_font, center_alignment)
-                self._safe_set_cell_value(f'H{current_row}', 'x', normal_font, center_alignment)
-                self._safe_set_cell_value(f'I{current_row}', height_display, normal_font, center_alignment)
-                self._safe_set_cell_value(f'J{current_row}', unit_display, normal_font, center_alignment)
+                    self._safe_set_cell_value(f'G{current_row}', width_display, normal_font, center_alignment)
+                    self._safe_set_cell_value(f'H{current_row}', 'x', normal_font, center_alignment)
+                    self._safe_set_cell_value(f'I{current_row}', height_display, normal_font, center_alignment)
+                    self._safe_set_cell_value(f'J{current_row}', unit_display, normal_font, center_alignment)
                 
                 # QTY in column K
                 quantity = int(item.get('quantity', 1))
