@@ -218,7 +218,10 @@ class PriceCalculator:
         
         # Apply finish multiplier
         finish_multiplier = 1.0
-        if finish == 'Anodized Aluminum' and anodized_multiplier is not None:
+        # Handle None finish (no finish applied, multiplier stays 1.0)
+        if finish is None:
+            finish_multiplier = 1.0
+        elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
             if self._is_equation(anodized_multiplier):
                 variables = {
                     'BP': base_price,
@@ -232,7 +235,7 @@ class PriceCalculator:
                     finish_multiplier = 1.0
             elif self._is_number(anodized_multiplier):
                 finish_multiplier = float(anodized_multiplier)
-        elif 'Powder Coated' in finish and powder_coated_multiplier is not None:
+        elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
             if self._is_equation(powder_coated_multiplier):
                 variables = {
                     'BP': base_price,
@@ -246,7 +249,7 @@ class PriceCalculator:
                     finish_multiplier = 1.0
             elif self._is_number(powder_coated_multiplier):
                 finish_multiplier = float(powder_coated_multiplier)
-        elif 'Special Color' in finish:
+        elif finish and 'Special Color' in finish:
             finish_multiplier = special_color_multiplier
         
         final_price = base_price * finish_multiplier
@@ -333,12 +336,15 @@ class PriceCalculator:
         wd_multiplier_value = None
         
         # Get finish multiplier
-        if finish == 'Anodized Aluminum' and anodized_multiplier is not None:
+        # Handle None finish (no finish applied, multiplier stays 1.0)
+        if finish is None:
+            finish_multiplier = None  # Will result in multiplier 1.0
+        elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
             finish_multiplier = anodized_multiplier
-        elif 'Powder Coated' in finish and powder_coated_multiplier is not None:
+        elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
             # Powder Coated uses the same multiplier regardless of color
             finish_multiplier = powder_coated_multiplier
-        elif 'Special Color' in finish:
+        elif finish and 'Special Color' in finish:
             # Use the user-provided multiplier for special colors
             finish_multiplier = special_color_multiplier
         
@@ -424,12 +430,15 @@ class PriceCalculator:
         wd_multiplier_value = None
         
         # Get finish multiplier
-        if finish == 'Anodized Aluminum' and anodized_multiplier is not None:
+        # Handle None finish (no finish applied, multiplier stays 1.0)
+        if finish is None:
+            finish_multiplier = None  # Will result in multiplier 1.0
+        elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
             finish_multiplier = anodized_multiplier
-        elif 'Powder Coated' in finish and powder_coated_multiplier is not None:
+        elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
             # Powder Coated uses the same multiplier regardless of color
             finish_multiplier = powder_coated_multiplier
-        elif 'Special Color' in finish:
+        elif finish and 'Special Color' in finish:
             # Use the user-provided multiplier for special colors
             finish_multiplier = special_color_multiplier
         

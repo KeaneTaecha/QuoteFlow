@@ -924,7 +924,8 @@ class QuotationApp(QMainWindow):
             try:
                 excel_item = item.copy()
                 # Convert finish to Thai using the exporter's method
-                excel_item['finish'] = self.excel_exporter.get_thai_finishing(item.get('finish', ''))
+                finish_value = item.get('finish') or ''
+                excel_item['finish'] = self.excel_exporter.get_thai_finishing(finish_value)
                 # Remove warning messages from detail field for Excel export
                 detail = excel_item.get('detail', '')
                 if detail:
@@ -1639,7 +1640,7 @@ class QuotationApp(QMainWindow):
                 product_text += f" (WARNING: {item.get('warning_message')})"
                 self.items_table.setItem(row, 1, QTableWidgetItem(product_text))
                 self.items_table.setItem(row, 2, QTableWidgetItem(item.get('detail', '')))  # Detail column
-                self.items_table.setItem(row, 3, QTableWidgetItem(item['finish']))
+                self.items_table.setItem(row, 3, QTableWidgetItem(item.get('finish') or ''))
                 self.items_table.setItem(row, 4, QTableWidgetItem(item['size']))
                 self.items_table.setItem(row, 5, QTableWidgetItem(str(item['quantity'])))
                 
@@ -1673,7 +1674,7 @@ class QuotationApp(QMainWindow):
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
                 self.items_table.setItem(row, 1, QTableWidgetItem(item['product_code']))
                 self.items_table.setItem(row, 2, QTableWidgetItem(item.get('detail', '')))  # Detail column
-                self.items_table.setItem(row, 3, QTableWidgetItem(item['finish']))
+                self.items_table.setItem(row, 3, QTableWidgetItem(item.get('finish') or ''))
                 self.items_table.setItem(row, 4, QTableWidgetItem(item['size']))
                 self.items_table.setItem(row, 5, QTableWidgetItem(str(item['quantity'])))
                 

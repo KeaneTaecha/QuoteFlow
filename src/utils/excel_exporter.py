@@ -91,6 +91,8 @@ class ExcelQuotationExporter:
         Raises:
             ValueError: If "Powder Coated" or "Special Color" is in finish but no sub-color is specified (no " - " separator)
         """
+        if not finish:
+            return ''
         if 'Anodized' in finish:
             return 'สีอลูมิเนียม'
         elif 'Powder Coated' in finish:
@@ -209,8 +211,12 @@ class ExcelQuotationExporter:
                 self._safe_set_cell_value(f'D{current_row}', detail, normal_font, left_alignment)
                 
                 # FINISHING in column F - Thai text with bottom right alignment
-                finish = item.get('finish', '')
-                thai_finish = self.get_thai_finishing(finish)
+                finish = item.get('finish')
+                # Handle None finish - display empty string
+                if finish is None:
+                    thai_finish = ''
+                else:
+                    thai_finish = self.get_thai_finishing(finish)
                 bottom_right_alignment = Alignment(horizontal='right', vertical='bottom')
                 self._safe_set_cell_value(f'F{current_row}', thai_finish, normal_font, bottom_right_alignment)
             

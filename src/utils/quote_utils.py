@@ -32,7 +32,7 @@ def calculate_ins_price(width_inches: float, height_inches: float) -> float:
 def build_quote_item(
     price_loader: PriceCalculator,
     product: str,
-    finish: str,
+    finish: Optional[str],
     quantity: int,
     has_wd: bool,
     has_price_per_foot: bool,
