@@ -198,6 +198,11 @@ class ExcelQuotationExporter:
                 self._safe_set_cell_value(f'M{current_row}', '', normal_font, right_alignment)
                 self._safe_set_cell_value(f'O{current_row}', '', normal_font, center_alignment)
                 self._safe_set_cell_value(f'Q{current_row}', '', normal_font, right_alignment)
+                # Clear pricing breakdown columns for title rows
+                self._safe_set_cell_value(f'Y{current_row}', '', normal_font, right_alignment)
+                self._safe_set_cell_value(f'Z{current_row}', '', normal_font, right_alignment)
+                self._safe_set_cell_value(f'AA{current_row}', '', normal_font, right_alignment)
+                self._safe_set_cell_value(f'AB{current_row}', '', normal_font, right_alignment)
             else:
                 # Regular product row
                 # NO. in column A (set as integer to avoid "Number Stored as Text" warning)
@@ -369,6 +374,41 @@ class ExcelQuotationExporter:
                 item_total = discounted_price * quantity
                 self._safe_set_cell_value(f'Q{current_row}', item_total, normal_font, right_alignment)
                 sub_total += item_total
+                
+                # === PRICING BREAKDOWN TABLE STARTING AT COLUMN Y ===
+                # Column Y: List (table price)
+                table_price = item.get('table_price', 0.0)
+                self._safe_set_cell_value(f'Y{current_row}', table_price, normal_font, right_alignment)
+                
+                # Column Z: พ่นส๊ (List * finish multiplier = price_after_finish)
+                price_after_finish = item.get('price_after_finish', 0.0)
+                ins_price = item.get('ins_price', 0.0)
+                filter_price = item.get('filter_price', 0.0)
+                
+                # Use formula: =Y{row} * (price_after_finish/table_price) if table_price > 0
+                # If table_price is 0, use IF formula to avoid division by zero
+                cell_z = self.ws[f'Z{current_row}']
+                if table_price > 0:
+                    finish_multiplier = price_after_finish / table_price
+                    cell_z.value = f'=Y{current_row}*{finish_multiplier}'
+                else:
+                    # If table_price is 0, just use price_after_finish directly
+                    cell_z.value = f'=IF(Y{current_row}=0,{price_after_finish},Y{current_row}*({price_after_finish}/Y{current_row}))'
+                cell_z.font = normal_font
+                cell_z.alignment = right_alignment
+                
+                # Column AA: subtotal (พ่นส๊ + INS + Filter)
+                cell_aa = self.ws[f'AA{current_row}']
+                cell_aa.value = f'=Z{current_row}+{ins_price}+{filter_price}'
+                cell_aa.font = normal_font
+                cell_aa.alignment = right_alignment
+                
+                # Column AB: Total (subtotal * (1 - Discount))
+                # Handle empty discount cell - if O{row} is empty or 0, treat as 0 discount
+                cell_ab = self.ws[f'AB{current_row}']
+                cell_ab.value = f'=AA{current_row}*(1-IF(OR(O{current_row}="",O{current_row}=0),0,O{current_row}))'
+                cell_ab.font = normal_font
+                cell_ab.alignment = right_alignment
                 
                 item_no += 1
             

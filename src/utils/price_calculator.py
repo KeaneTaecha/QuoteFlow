@@ -9,6 +9,21 @@ from utils.equation_parser import EquationParser
 from utils.sql_loader import PriceDatabase
 
 
+class PriceNotFoundError(Exception):
+    """Raised when a price cannot be found in the database"""
+    pass
+
+
+class ProductNotFoundError(Exception):
+    """Raised when a product cannot be found in the database"""
+    pass
+
+
+class SizeNotFoundError(Exception):
+    """Raised when a size cannot be found in the database"""
+    pass
+
+
 class PriceCalculator:
     """Calculates prices using data from SQLite database"""
     
@@ -167,9 +182,15 @@ class PriceCalculator:
             product: Product model name
             
         Returns:
-            price_id or None if not found
+            price_id
+            
+        Raises:
+            ProductNotFoundError: If price_id is not found
         """
-        return self.db.get_price_id_for_no_dimensions(product)
+        price_id = self.db.get_price_id_for_no_dimensions(product)
+        if price_id is None:
+            raise ProductNotFoundError(f'Price ID not found for product {product}')
+        return price_id
     
     def get_price_for_price_per_foot(self, product, finish, width, height, with_damper=False, special_color_multiplier=1.0, price_id=None):
         """Get price for a product with price_per_foot pricing
@@ -186,12 +207,16 @@ class PriceCalculator:
             price_id: Optional price_id to use directly (for has_no_dimensions case)
             
         Returns:
-            Calculated price or 0 if not found
+            Calculated price
+            
+        Raises:
+            ProductNotFoundError: If product multipliers or table_id not found
+            PriceNotFoundError: If price_per_foot not found
         """
         # Get product multipliers
         multipliers = self.db.get_product_multipliers(product)
         if not multipliers:
-            return 0
+            raise ProductNotFoundError(f'Product multipliers not found for {product}')
         
         anodized_multiplier = multipliers[0]
         powder_coated_multiplier = multipliers[1]
@@ -199,7 +224,7 @@ class PriceCalculator:
         # Get table_id
         table_id = self.db.get_table_id(product)
         if table_id is None:
-            return 0
+            raise ProductNotFoundError(f'Table ID not found for product {product}')
         
         # Get price_per_foot
         # Note: 'width' parameter is actually the size value stored in SQL height column
@@ -210,7 +235,7 @@ class PriceCalculator:
             price_per_foot = self.db.get_price_per_foot(table_id, size_int)
         
         if price_per_foot is None:
-            return 0
+            raise PriceNotFoundError(f'Price per foot not found for product {product}')
         
         # Calculate base price: (height / 12) * price_per_foot
         # Note: 'height' parameter is the dimension to multiply with price_per_foot
@@ -256,16 +281,32 @@ class PriceCalculator:
         return int(final_price + 0.5)
     
     def find_rounded_price_per_foot_width(self, product, width):
-        """Find the exact match first, then the next available width that is >= the given width for price_per_foot products"""
+        """Find the exact match first, then the next available width that is >= the given width for price_per_foot products
+        
+        Returns:
+            Rounded width
+            
+        Raises:
+            SizeNotFoundError: If rounded width not found
+        """
         width_int = int(width)
-        return self.db.find_rounded_price_per_foot_width(product, width_int)
+        rounded_width = self.db.find_rounded_price_per_foot_width(product, width_int)
+        if rounded_width is None:
+            raise SizeNotFoundError(f'Height {width}" not available in price list for {product}. Please check available heights in the database.')
+        return rounded_width
     
     def get_price_for_default_table(self, product, finish, size, with_damper=False, special_color_multiplier=1.0):
-        """Get price for a specific product configuration using idx_price_lookup index"""
+        """Get price for a specific product configuration using idx_price_lookup index
+        
+        Raises:
+            ValueError: If size format is invalid
+            ProductNotFoundError: If product data not found
+            PriceNotFoundError: If price not found
+        """
         # Parse size to get width and height
         size_match = re.search(r'(\d+(?:\.\d+)?)"?\s*x\s*(\d+(?:\.\d+)?)"?', size.lower())
         if not size_match:
-            return 0
+            raise ValueError(f'Invalid size format: {size}')
         
         width = int(float(size_match.group(1)))
         height = int(float(size_match.group(2)))
@@ -273,7 +314,7 @@ class PriceCalculator:
         # Get product data
         product_data = self.db.get_product_data(product)
         if not product_data:
-            return 0
+            raise ProductNotFoundError(f'Product data not found for {product}')
         
         table_id = product_data[0]
         tb_modifier = product_data[1]
@@ -302,7 +343,7 @@ class PriceCalculator:
             # Query prices using the table_id and dimensions
             price_result = self.db.get_price_for_dimensions(table_id, height, width)
             if not price_result:
-                return 0
+                raise PriceNotFoundError(f'Price not found for {product} with size {size}')
             
             # Get base prices
             tb_price = price_result[0] if price_result[0] is not None else 0  # Table base price
@@ -372,22 +413,32 @@ class PriceCalculator:
         return final_price
     
     def find_rounded_default_table_size(self, product, finish, width, height):
-        """Find the exact match first, then the next available size that is >= the given width and height"""
+        """Find the exact match first, then the next available size that is >= the given width and height
+        
+        Returns:
+            Rounded size string or None if not found (None is acceptable here as it's used with 'or' operator)
+        """
         return self.db.find_rounded_default_table_size(product, width, height)
     
     def get_price_for_other_table(self, product, finish, diameter, with_damper=False, special_color_multiplier=1.0):
-        """Get price for an other table (diameter-based) product configuration"""
+        """Get price for an other table (diameter-based) product configuration
+        
+        Raises:
+            ValueError: If diameter format is invalid
+            ProductNotFoundError: If product data not found
+            PriceNotFoundError: If price not found
+        """
         # Parse diameter value if it's a string (e.g., "8\" diameter" -> 8)
         if isinstance(diameter, str):
             diameter_match = re.search(r'(\d+(?:\.\d+)?)', diameter)
             if not diameter_match:
-                return 0
+                raise ValueError(f'Invalid diameter format: {diameter}')
             diameter = int(float(diameter_match.group(1)))
         
         # Get product data
         product_data = self.db.get_product_data(product)
         if not product_data:
-            return 0
+            raise ProductNotFoundError(f'Product data not found for {product}')
         
         table_id = product_data[0]
         tb_modifier = product_data[1]
@@ -398,7 +449,7 @@ class PriceCalculator:
         # Query prices using the table_id and diameter
         price_result = self.db.get_price_for_diameter(table_id, diameter)
         if not price_result:
-            return 0
+            raise PriceNotFoundError(f'Price not found for {product} with diameter {diameter}"')
         
         # Get base prices
         tb_price = price_result[0] if price_result[0] is not None else 0  # Table base price
@@ -466,10 +517,16 @@ class PriceCalculator:
             price_id: Optional price_id to use directly (for has_no_dimensions case)
             
         Returns:
-            Size string (e.g., "8\" diameter") or None if not found
+            Size string (e.g., "8\" diameter")
+            
+        Raises:
+            SizeNotFoundError: If rounded size not found
         """
         diameter_int = int(diameter) if not isinstance(diameter, str) else int(float(re.search(r'(\d+(?:\.\d+)?)', diameter).group(1)))
-        return self.db.find_rounded_other_table_size(product, diameter_int, price_id)
+        rounded_size = self.db.find_rounded_other_table_size(product, diameter_int, price_id)
+        if not rounded_size:
+            raise SizeNotFoundError(f'Size not available for {product}')
+        return rounded_size
     
     def has_damper_option(self, product, finish):
         """Check if a product has a non-null WD multiplier in the header sheet"""
