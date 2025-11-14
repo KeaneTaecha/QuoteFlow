@@ -199,10 +199,16 @@ class ExcelQuotationExporter:
                 self._safe_set_cell_value(f'O{current_row}', '', normal_font, center_alignment)
                 self._safe_set_cell_value(f'Q{current_row}', '', normal_font, right_alignment)
                 # Clear pricing breakdown columns for title rows
+                self._safe_set_cell_value(f'V{current_row}', '', normal_font, right_alignment)
+                self._safe_set_cell_value(f'W{current_row}', '', normal_font, right_alignment)
+                self._safe_set_cell_value(f'X{current_row}', '', normal_font, right_alignment)
                 self._safe_set_cell_value(f'Y{current_row}', '', normal_font, right_alignment)
                 self._safe_set_cell_value(f'Z{current_row}', '', normal_font, right_alignment)
                 self._safe_set_cell_value(f'AA{current_row}', '', normal_font, right_alignment)
                 self._safe_set_cell_value(f'AB{current_row}', '', normal_font, right_alignment)
+                self._safe_set_cell_value(f'AC{current_row}', '', normal_font, right_alignment)
+                self._safe_set_cell_value(f'AD{current_row}', '', normal_font, right_alignment)
+                self._safe_set_cell_value(f'AE{current_row}', '', normal_font, right_alignment)
             else:
                 # Regular product row
                 # NO. in column A (set as integer to avoid "Number Stored as Text" warning)
@@ -352,10 +358,6 @@ class ExcelQuotationExporter:
                 quantity = int(item.get('quantity', 1))
                 self._safe_set_cell_value(f'K{current_row}', quantity, normal_font, center_alignment)
                 
-                # UNIT PRICE in column M (changed from L)
-                unit_price = float(item.get('unit_price', 0))
-                self._safe_set_cell_value(f'M{current_row}', unit_price, normal_font, right_alignment)
-                
                 # Discount in column O (unchanged)
                 discount = item.get('discount', 0)
                 if discount > 0:
@@ -365,50 +367,97 @@ class ExcelQuotationExporter:
                     cell.font = normal_font
                     cell.alignment = center_alignment
                     cell.number_format = '0%'  # Format as percentage
-                    discounted_price = unit_price * (1 - discount)
                 else:
                     self._safe_set_cell_value(f'O{current_row}', '', normal_font, center_alignment)
-                    discounted_price = unit_price
                 
-                # AMOUNT in column Q (changed from P)
+                # UNIT PRICE in column M - links to AE column (รวมทั้งหมด)
+                cell_m = self.ws[f'M{current_row}']
+                cell_m.value = f'=AE{current_row}'
+                cell_m.font = normal_font
+                cell_m.alignment = right_alignment
+                
+                # AMOUNT in column Q - ราคาต่อหน่วย x จำนวน (M * K)
+                cell_q = self.ws[f'Q{current_row}']
+                cell_q.value = f'=M{current_row}*K{current_row}'
+                cell_q.font = normal_font
+                cell_q.alignment = right_alignment
+                
+                # Calculate item_total for footer (using AE value, but we'll calculate it after AE is set)
+                # We'll need to recalculate this after AE column is populated
+                unit_price = float(item.get('unit_price', 0))
+                if discount > 0:
+                    discounted_price = unit_price * (1 - discount)
+                else:
+                    discounted_price = unit_price
                 item_total = discounted_price * quantity
-                self._safe_set_cell_value(f'Q{current_row}', item_total, normal_font, right_alignment)
                 sub_total += item_total
                 
-                # === PRICING BREAKDOWN TABLE STARTING AT COLUMN Y ===
-                # Column Y: List (table price)
+                # === PRICING BREAKDOWN TABLE STARTING AT COLUMN V ===
+                # Column V: List (table price)
                 table_price = item.get('table_price', 0.0)
-                self._safe_set_cell_value(f'Y{current_row}', table_price, normal_font, right_alignment)
+                self._safe_set_cell_value(f'V{current_row}', table_price, normal_font, right_alignment)
                 
-                # Column Z: พ่นส๊ (List * finish multiplier = price_after_finish)
+                # Column W: พ่นส๊ (List * finish multiplier = price_after_finish)
                 price_after_finish = item.get('price_after_finish', 0.0)
                 ins_price = item.get('ins_price', 0.0)
                 filter_price = item.get('filter_price', 0.0)
                 
-                # Use formula: =Y{row} * (price_after_finish/table_price) if table_price > 0
+                # Use formula: =V{row} * (price_after_finish/table_price) if table_price > 0
                 # If table_price is 0, use IF formula to avoid division by zero
-                cell_z = self.ws[f'Z{current_row}']
+                cell_w = self.ws[f'W{current_row}']
                 if table_price > 0:
                     finish_multiplier = price_after_finish / table_price
-                    cell_z.value = f'=Y{current_row}*{finish_multiplier}'
+                    cell_w.value = f'=V{current_row}*{finish_multiplier}'
                 else:
                     # If table_price is 0, just use price_after_finish directly
-                    cell_z.value = f'=IF(Y{current_row}=0,{price_after_finish},Y{current_row}*({price_after_finish}/Y{current_row}))'
+                    cell_w.value = f'=IF(V{current_row}=0,{price_after_finish},V{current_row}*({price_after_finish}/V{current_row}))'
+                cell_w.font = normal_font
+                cell_w.alignment = right_alignment
+                
+                # Column X: INS price
+                self._safe_set_cell_value(f'X{current_row}', ins_price, normal_font, right_alignment)
+                
+                # Column Y: Filter price
+                self._safe_set_cell_value(f'Y{current_row}', filter_price, normal_font, right_alignment)
+                
+                # Column Z: subtotal (พ่นส๊ + INS + Filter)
+                cell_z = self.ws[f'Z{current_row}']
+                cell_z.value = f'=W{current_row}+X{current_row}+Y{current_row}'
                 cell_z.font = normal_font
                 cell_z.alignment = right_alignment
                 
-                # Column AA: subtotal (พ่นส๊ + INS + Filter)
+                # Column AA: Discount (from column O)
+                # Copy discount value from column O to column AA for pricing breakdown
                 cell_aa = self.ws[f'AA{current_row}']
-                cell_aa.value = f'=Z{current_row}+{ins_price}+{filter_price}'
-                cell_aa.font = normal_font
-                cell_aa.alignment = right_alignment
+                if discount > 0:
+                    cell_aa.value = discount
+                    cell_aa.font = normal_font
+                    cell_aa.alignment = right_alignment
+                    cell_aa.number_format = '0%'  # Format as percentage
+                else:
+                    cell_aa.value = 0
+                    cell_aa.font = normal_font
+                    cell_aa.alignment = right_alignment
+                    cell_aa.number_format = '0%'
                 
-                # Column AB: Total (subtotal * (1 - Discount))
-                # Handle empty discount cell - if O{row} is empty or 0, treat as 0 discount
+                # Column AB: Total (subtotal * (1 - Discount) from AA column)
+                # When discount is 0%, Total = Subtotal; when discount > 0%, Total = Subtotal * (1 - Discount)
                 cell_ab = self.ws[f'AB{current_row}']
-                cell_ab.value = f'=AA{current_row}*(1-IF(OR(O{current_row}="",O{current_row}=0),0,O{current_row}))'
+                cell_ab.value = f'=Z{current_row}*(1-AA{current_row})'
                 cell_ab.font = normal_font
                 cell_ab.alignment = right_alignment
+                
+                # Column AC: ค่าสี (Color cost) - left blank for manual entry
+                self._safe_set_cell_value(f'AC{current_row}', '', normal_font, right_alignment)
+                
+                # Column AD: ค่าขนส่ง (Shipping cost) - left blank for manual entry
+                self._safe_set_cell_value(f'AD{current_row}', '', normal_font, right_alignment)
+                
+                # Column AE: รวมทั้งหมด (Grand Total) = Total + ค่าสี + ค่าขนส่ง
+                cell_ae = self.ws[f'AE{current_row}']
+                cell_ae.value = f'=AB{current_row}+AC{current_row}+AD{current_row}'
+                cell_ae.font = normal_font
+                cell_ae.alignment = right_alignment
                 
                 item_no += 1
             
@@ -419,18 +468,29 @@ class ExcelQuotationExporter:
         # Footer starts at row 29 in template, but shifted down by inserted rows
         footer_start_row = 29 + rows_to_insert
         
-        # Sub total
-        self._safe_set_cell_value(f'Q{footer_start_row}', sub_total, bold_font)
+        # Calculate the last item row (current_row - 1 after the loop)
+        last_item_row = current_row - 1
+        first_item_row = 14
         
-        # VAT
-        vat = sub_total * 0.07
-        self._safe_set_cell_value(f'Q{footer_start_row + 1}', vat, bold_font)
+        # Sub total - use SUM formula for column Q
+        cell_subtotal = self.ws[f'Q{footer_start_row}']
+        cell_subtotal.value = f'=SUM(Q{first_item_row}:Q{last_item_row})'
+        cell_subtotal.font = bold_font
+        cell_subtotal.alignment = right_alignment
         
-        # Grand total
-        grand_total = sub_total + vat
+        # VAT - 7% of subtotal
+        cell_vat = self.ws[f'Q{footer_start_row + 1}']
+        cell_vat.value = f'=Q{footer_start_row}*0.07'
+        cell_vat.font = bold_font
+        cell_vat.alignment = right_alignment
+        
+        # Grand total - subtotal + VAT
+        grand_total = sub_total + (sub_total * 0.07)  # For Thai baht text calculation
         self._safe_set_cell_value(f'A{footer_start_row + 2}', self.thai_baht_text(grand_total), normal_font)
-        self._safe_set_cell_value(f'Q{footer_start_row + 2}', grand_total, 
-                                 Font(name='Angsana New', size=14, bold=True))
+        cell_grand_total = self.ws[f'Q{footer_start_row + 2}']
+        cell_grand_total.value = f'=Q{footer_start_row}+Q{footer_start_row + 1}'
+        cell_grand_total.font = Font(name='Angsana New', size=14, bold=True)
+        cell_grand_total.alignment = right_alignment
         
         # Footer information - populate template fields
         footer_row = footer_start_row + 4
