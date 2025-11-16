@@ -235,13 +235,17 @@ class ExcelItemImporter:
             return 0.0
     
     def _parse_dimension_with_unit(self, value, default_unit):
-        """Parse dimension value, handling quote (") for inches
+        """Parse dimension value, detecting unit from value or using default_unit
         
-        If value contains a quote ("), it's treated as inches regardless of default_unit.
-        Otherwise, uses the default_unit (inches or millimeters).
+        If value contains a unit symbol (", ', mm, cm, m, ft, etc.), it's treated as that unit
+        regardless of default_unit. Otherwise, uses the default_unit.
         
         Examples:
         - "3\"" with default_unit='millimeters' → (3.0, 'inches')
+        - "550mm" with default_unit='inches' → (550.0, 'millimeters')
+        - "2ft" with default_unit='inches' → (2.0, 'feet')
+        - "1.5m" with default_unit='inches' → (1.5, 'meters')
+        - "50cm" with default_unit='inches' → (50.0, 'centimeters')
         - "550" with default_unit='millimeters' → (550.0, 'millimeters')
         - "3" with default_unit='inches' → (3.0, 'inches')
         """
@@ -249,17 +253,59 @@ class ExcelItemImporter:
             return None, None
         
         value_str = str(value).strip()
+        value_lower = value_str.lower()
         
-        # Check if there's a quote (") anywhere in the string (e.g., "3"" or "3 inches" or just "3")
-        # If quote is present, ALWAYS treat as inches regardless of default_unit
+        # Detect unit in the value string (check in order: longer units first)
+        # Check for quote (") - inches
         if '"' in value_str:
-            # Extract number and treat as inches
             match = re.search(r'(\d+(?:\.\d+)?)', value_str)
             if match:
                 num_value = float(match.group(1))
                 return num_value, 'inches'
         
-        # No quote found, use default_unit
+        # Check for single quote (') - feet
+        if "'" in value_str:
+            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
+            if match:
+                num_value = float(match.group(1))
+                return num_value, 'feet'
+        
+        # Check for cm (but not part of mm)
+        if 'cm' in value_lower and 'mm' not in value_lower:
+            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
+            if match:
+                num_value = float(match.group(1))
+                return num_value, 'centimeters'
+        
+        # Check for mm
+        if 'mm' in value_lower:
+            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
+            if match:
+                num_value = float(match.group(1))
+                return num_value, 'millimeters'
+        
+        # Check for meters (m, meter, metre) - but not part of mm or cm
+        if re.search(r'\b(m|meter|metre)\b', value_lower) and 'mm' not in value_lower and 'cm' not in value_lower:
+            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
+            if match:
+                num_value = float(match.group(1))
+                return num_value, 'meters'
+        
+        # Check for feet (ft, feet, foot)
+        if re.search(r'\b(ft|feet|foot)\b', value_lower):
+            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
+            if match:
+                num_value = float(match.group(1))
+                return num_value, 'feet'
+        
+        # Check for inches (inch, in) - but not part of other units
+        if re.search(r'\b(inch|in)\b', value_lower) and 'mm' not in value_lower and 'cm' not in value_lower:
+            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
+            if match:
+                num_value = float(match.group(1))
+                return num_value, 'inches'
+        
+        # No unit detected in value, use default_unit
         # Try to extract number
         match = re.search(r'(\d+(?:\.\d+)?)', value_str)
         if match:
@@ -320,16 +366,22 @@ class ExcelItemImporter:
         finish_from_excel = item_data.get('finish')  # Finish from Excel file
         discount = item_data.get('discount', 0.0)  # Discount percentage (0-100), default 0
         
-        # Determine default unit (inches or millimeters) - validate unit is compatible
+        # Determine default unit - validate unit is compatible
         unit_str_lower = str(unit_str).lower().strip()
         if 'mm' in unit_str_lower or 'millimeter' in unit_str_lower:
             default_unit = 'millimeters'
+        elif 'cm' in unit_str_lower or 'centimeter' in unit_str_lower:
+            default_unit = 'centimeters'
+        elif unit_str_lower == 'm' or 'meter' in unit_str_lower:
+            default_unit = 'meters'
+        elif unit_str_lower == 'ft' or unit_str_lower == "'" or 'foot' in unit_str_lower or 'feet' in unit_str_lower:
+            default_unit = 'feet'
         elif 'inch' in unit_str_lower or unit_str_lower == '"' or unit_str_lower == 'in' or unit_str_lower == '':
             # Empty string defaults to inches (for backward compatibility when unit column is empty)
             default_unit = 'inches'
         else:
             # Unit is provided but not compatible - raise error
-            return {'success': False, 'error': f'Incompatible unit "{unit_str}". Supported units are: inches (or "), millimeters (or mm)'}
+            return {'success': False, 'error': f'Incompatible unit "{unit_str}". Supported units are: inches (or "), millimeters (or mm), centimeters (or cm), meters (or m), feet (or ft)'}
         
         # Extract filter suffix, WD, and INS if present
         # Use combined extraction to handle WD, INS, and filter
@@ -339,11 +391,11 @@ class ExcelItemImporter:
         # Pass pre-extracted values to avoid redundant extraction
         product_exists, product, has_wd_from_db, error_msg = validate_product_exists(
             base_model, self.available_models, self.price_loader, filter_type,
-            base_product=base_model, has_wd=has_wd_from_name
+            has_wd=has_wd_from_name
         )
         
         # Use WD from name if specified, otherwise use from database validation
-        has_wd = has_wd_from_name or has_wd_from_db 
+        has_wd = has_wd_from_name or has_wd_from_db
         
         if not product_exists:
             return {'success': False, 'error': error_msg or f'Product "{model}" not found in database'}

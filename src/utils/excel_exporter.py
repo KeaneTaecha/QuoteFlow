@@ -248,12 +248,16 @@ class ExcelQuotationExporter:
                         raise ValueError(f"Empty {field_name} value")
                     value_str = value_str.strip()
                     
-                    # Detect unit
-                    has_mm = 'mm' in value_str.lower()
-                    has_quote = '"' in value_str or "'" in value_str
+                    # Detect unit (check in order: longer units first to avoid partial matches)
+                    value_lower = value_str.lower()
+                    has_cm = 'cm' in value_lower and 'mm' not in value_lower  # cm but not part of mm
+                    has_mm = 'mm' in value_lower
+                    has_m = re.search(r'\b(m|meter|metre)\b', value_lower) and 'mm' not in value_lower and 'cm' not in value_lower
+                    has_ft = re.search(r'\b(ft|feet|foot)\b', value_lower) or "'" in value_str
+                    has_quote = '"' in value_str
                     
-                    # Extract numeric value
-                    cleaned = value_str.replace('"', '').replace("'", '').replace('"', '').replace("'", '').replace('mm', '').replace('MM', '').replace('Mm', '').strip()
+                    # Extract numeric value (remove all unit symbols)
+                    cleaned = value_str.replace('"', '').replace("'", '').replace('mm', '').replace('MM', '').replace('Mm', '').replace('cm', '').replace('CM', '').replace('Cm', '').replace('m', '').replace('M', '').replace('ft', '').replace('FT', '').replace('Ft', '').replace('feet', '').replace('Feet', '').replace('foot', '').replace('Foot', '').replace('meter', '').replace('Meter', '').replace('metre', '').replace('Metre', '').strip()
                     match = re.search(r'-?\d+\.?\d*', cleaned)
                     if not match:
                         raise ValueError(f"Could not extract numeric value from {field_name} '{value_str}'")
@@ -263,9 +267,15 @@ class ExcelQuotationExporter:
                     except ValueError as e:
                         raise ValueError(f"Could not convert {field_name} '{value_str}' to float: {e}")
                     
-                    # Determine unit
-                    if has_mm:
+                    # Determine unit (check in order of specificity)
+                    if has_cm:
+                        return numeric_value, 'cm'
+                    elif has_mm:
                         return numeric_value, 'mm'
+                    elif has_m:
+                        return numeric_value, 'm'
+                    elif has_ft:
+                        return numeric_value, 'ft'
                     elif has_quote:
                         return numeric_value, '"'
                     else:
@@ -287,6 +297,15 @@ class ExcelQuotationExporter:
                     if diameter_unit == '"':
                         diameter_display = format_number(diameter_val)
                         unit_display = 'in'
+                    elif diameter_unit == 'cm':
+                        diameter_display = format_number(diameter_val)
+                        unit_display = 'cm'
+                    elif diameter_unit == 'm':
+                        diameter_display = format_number(diameter_val)
+                        unit_display = 'm'
+                    elif diameter_unit == 'ft':
+                        diameter_display = format_number(diameter_val)
+                        unit_display = 'ft'
                     else:
                         diameter_display = format_number(diameter_val)
                         unit_display = 'mm'
@@ -316,38 +335,52 @@ class ExcelQuotationExporter:
                     def format_number(num):
                         return int(num) if num == int(num) else num
                     
+                    # Helper to get unit display symbol
+                    def get_unit_display(unit):
+                        """Convert unit string to display symbol."""
+                        if unit == '"':
+                            return 'in'
+                        elif unit == 'mm':
+                            return 'mm'
+                        elif unit == 'cm':
+                            return 'cm'
+                        elif unit == 'm':
+                            return 'm'
+                        elif unit == 'ft':
+                            return 'ft'
+                        else:
+                            return 'in'  # Default
+                    
+                    # Helper to format dimension with unit if needed
+                    def format_dimension_with_unit(value, unit):
+                        """Format dimension value, adding unit symbol if unit is not standard."""
+                        num = format_number(value)
+                        if unit in ['mm', 'cm', 'm', 'ft']:
+                            return f'{num}{unit}'
+                        elif unit == '"':
+                            return f'{num}"'
+                        else:
+                            return num
+                    
                     # Display logic: if same unit, show numbers only; if different, show units after numbers
                     # Special handling for "Slot" in width
                     if has_slot:
                         # Slot has no unit, always display as "7Slot" format
                         width_display = f'{format_number(width_val)}Slot'
                         # Use height unit for unit_display since Slot has no unit
-                        if height_unit == '"':
-                            height_display = format_number(height_val)
-                            unit_display = 'in'  # Height is in inches
-                        else:
-                            height_display = format_number(height_val)
-                            unit_display = 'mm'  # Height is in mm
+                        height_display = format_number(height_val)
+                        unit_display = get_unit_display(height_unit)
                     elif width_unit == height_unit:
                         # Same unit: show numbers only, put unit in column J
                         width_display = format_number(width_val)
                         height_display = format_number(height_val)
-                        unit_display = 'mm' if width_unit == 'mm' else 'in'
+                        unit_display = get_unit_display(width_unit)
                     else:
                         # Different units: show units after numbers, leave column J empty
-                        # For inches, we need to store as string with " symbol
-                        # For mm, store as numeric value to avoid "number stored as text" warning
-                        if width_unit == '"':
-                            width_display = f'{format_number(width_val)}"'
-                        else:
-                            width_display = format_number(width_val)
+                        width_display = format_dimension_with_unit(width_val, width_unit)
+                        height_display = format_dimension_with_unit(height_val, height_unit)
                         
-                        if height_unit == '"':
-                            height_display = f'{format_number(height_val)}"'
-                        else:
-                            height_display = format_number(height_val)
-                        
-                        unit_display = 'mm'
+                        unit_display = ''  # Empty when units are different (units shown with numbers)
                     
                     self._safe_set_cell_value(f'G{current_row}', width_display, normal_font, center_alignment)
                     self._safe_set_cell_value(f'H{current_row}', 'x', normal_font, center_alignment)

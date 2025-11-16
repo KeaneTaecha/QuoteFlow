@@ -549,7 +549,7 @@ class QuotationApp(QMainWindow):
         unit_layout = QVBoxLayout()
         unit_layout.addWidget(QLabel('Unit:'))
         self.unit_combo = QComboBox()
-        self.unit_combo.addItems(['Inches', 'Millimeters'])
+        self.unit_combo.addItems(['Inches', 'Millimeters', 'Centimeters', 'Meters', 'Feet'])
         self.unit_combo.currentTextChanged.connect(self.on_unit_changed)
         unit_layout.addWidget(self.unit_combo)
         first_row.addLayout(unit_layout)
@@ -999,7 +999,7 @@ class QuotationApp(QMainWindow):
                 finishes = self.price_loader.get_available_finishes(model)
                 has_damper = False
                 for finish in finishes:
-                    if self.price_loader.has_damper_option(model, finish):
+                    if self.price_loader.has_damper_option(model):
                         has_damper = True
                         break
                 if has_damper:
@@ -1047,7 +1047,16 @@ class QuotationApp(QMainWindow):
                 self.show_hide_widgets(self.other_table_layout, False)
                 # Update label to indicate height is required
                 unit = self.unit_combo.currentText()
-                unit_text = 'mm' if unit == 'Millimeters' else 'inches'
+                if unit == 'Millimeters':
+                    unit_text = 'mm'
+                elif unit == 'Centimeters':
+                    unit_text = 'cm'
+                elif unit == 'Meters':
+                    unit_text = 'm'
+                elif unit == 'Feet':
+                    unit_text = 'ft'
+                else:
+                    unit_text = 'inches'
                 self.height_label.setText(f'Height ({unit_text}) *')
             elif has_price_per_foot:
                 # For price_per_foot products, show width and height fields (required)
@@ -1241,8 +1250,62 @@ class QuotationApp(QMainWindow):
             self.other_table_spin.setMinimum(1)
             self.other_table_spin.setMaximum(9999)
             self.other_table_spin.setValue(100)  # 100mm ≈ 4 inches
-        else:
+        elif unit == 'Centimeters':
             # Update labels
+            self.width_label.setText('Width (cm):')
+            self.height_label.setText('Height (cm):')
+            self.other_table_label.setText('Size (cm):')
+            
+            # Update spin box ranges for cm
+            self.width_spin.setMinimum(1)
+            self.width_spin.setMaximum(9999)
+            self.width_spin.setValue(10)  # 10cm ≈ 4 inches
+            
+            self.height_spin.setMinimum(1)
+            self.height_spin.setMaximum(9999)
+            self.height_spin.setValue(10)  # 10cm ≈ 4 inches
+            
+            self.other_table_spin.setMinimum(1)
+            self.other_table_spin.setMaximum(9999)
+            self.other_table_spin.setValue(10)  # 10cm ≈ 4 inches
+        elif unit == 'Meters':
+            # Update labels
+            self.width_label.setText('Width (m):')
+            self.height_label.setText('Height (m):')
+            self.other_table_label.setText('Size (m):')
+            
+            # Update spin box ranges for m (using decimals)
+            self.width_spin.setMinimum(1)
+            self.width_spin.setMaximum(9999)
+            self.width_spin.setValue(1)  # 0.1m ≈ 4 inches
+            
+            self.height_spin.setMinimum(1)
+            self.height_spin.setMaximum(9999)
+            self.height_spin.setValue(1)  # 0.1m ≈ 4 inches
+            
+            self.other_table_spin.setMinimum(1)
+            self.other_table_spin.setMaximum(9999)
+            self.other_table_spin.setValue(1)  # 0.1m ≈ 4 inches
+        elif unit == 'Feet':
+            # Update labels
+            self.width_label.setText('Width (ft):')
+            self.height_label.setText('Height (ft):')
+            self.other_table_label.setText('Size (ft):')
+            
+            # Update spin box ranges for ft
+            self.width_spin.setMinimum(1)
+            self.width_spin.setMaximum(9999)
+            self.width_spin.setValue(1)  # 1ft = 12 inches
+            
+            self.height_spin.setMinimum(1)
+            self.height_spin.setMaximum(9999)
+            self.height_spin.setValue(1)  # 1ft = 12 inches
+            
+            self.other_table_spin.setMinimum(1)
+            self.other_table_spin.setMaximum(9999)
+            self.other_table_spin.setValue(1)  # 1ft = 12 inches
+        else:
+            # Update labels for inches
             self.width_label.setText('Width (inches):')
             self.height_label.setText('Height (inches):')
             self.other_table_label.setText('Size (inches):')
@@ -1326,7 +1389,7 @@ class QuotationApp(QMainWindow):
                 self.rounded_size_label.setText('N/A')
             elif is_other_table:
                 # For other table products with no dimensions, use find_rounded_other_table_size with price_id
-                rounded_size = self.price_loader.find_rounded_other_table_size(product, finish, 0, price_id=price_id)
+                rounded_size = self.price_loader.find_rounded_other_table_size(product, 0, price_id=price_id)
                 if not rounded_size:
                     self.unit_price_label.setText('N/A')
                     self.total_price_label.setText('฿ 0.00')
@@ -1378,7 +1441,7 @@ class QuotationApp(QMainWindow):
             size_inches = convert_dimension_to_inches(size, unit)
             
             # Find the rounded up size for pricing
-            rounded_size = self.price_loader.find_rounded_other_table_size(product, finish, size_inches)
+            rounded_size = self.price_loader.find_rounded_other_table_size(product, size_inches)
             if not rounded_size:
                 self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')

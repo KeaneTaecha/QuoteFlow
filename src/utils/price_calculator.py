@@ -507,12 +507,11 @@ class PriceCalculator:
         }
         return self._apply_pricing_logic(finish_multiplier, wd_multiplier_value, variables, with_damper)
     
-    def find_rounded_other_table_size(self, product, finish, diameter, price_id=None):
+    def find_rounded_other_table_size(self, product, diameter, price_id=None):
         """Find the exact match first, then the next available diameter that is >= the given diameter for other table products
         
         Args:
             product: Product model name
-            finish: Finish type (not used, kept for compatibility)
             diameter: Diameter in inches (not used if price_id is provided)
             price_id: Optional price_id to use directly (for has_no_dimensions case)
             
@@ -528,7 +527,7 @@ class PriceCalculator:
             raise SizeNotFoundError(f'Size not available for {product}')
         return rounded_size
     
-    def has_damper_option(self, product, finish):
+    def has_damper_option(self, product):
         """Check if a product has a non-null WD multiplier in the header sheet"""
         return self.db.has_damper_option(product)
     
