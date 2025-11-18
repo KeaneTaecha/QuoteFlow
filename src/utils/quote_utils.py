@@ -244,19 +244,13 @@ def build_quote_item(
         
         try:
             table_price = price_loader.get_price_for_other_table(product, None, rounded_size, has_wd, 1.0)
-        except (ProductNotFoundError, PriceNotFoundError, ValueError):
-            try:
-                table_price = price_loader.get_price_for_other_table(product, None, f'{size_inches}" diameter', has_wd, 1.0)
-            except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
-                return None, str(e)
+        except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
+            return None, str(e)
         
         try:
             price_after_finish = price_loader.get_price_for_other_table(product, finish, rounded_size, has_wd, special_color_multiplier)
-        except (ProductNotFoundError, PriceNotFoundError, ValueError):
-            try:
-                price_after_finish = price_loader.get_price_for_other_table(product, finish, f'{size_inches}" diameter', has_wd, special_color_multiplier)
-            except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
-                return None, str(e)
+        except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
+            return None, str(e)
         
         try:
             filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, False, size_inches=size_inches)
@@ -286,19 +280,13 @@ def build_quote_item(
         
         try:
             table_price = price_loader.get_price_for_default_table(product, None, rounded_size, has_wd, 1.0)
-        except (ProductNotFoundError, PriceNotFoundError, ValueError):
-            try:
-                table_price = price_loader.get_price_for_default_table(product, None, f'{width_inches}" x {height_inches}"', has_wd, 1.0)
-            except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
-                return None, str(e)
+        except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
+            return None, str(e)
         
         try:
             price_after_finish = price_loader.get_price_for_default_table(product, finish, rounded_size, has_wd, special_color_multiplier)
-        except (ProductNotFoundError, PriceNotFoundError, ValueError):
-            try:
-                price_after_finish = price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', has_wd, special_color_multiplier)
-            except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
-                return None, str(e)
+        except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
+            return None, str(e)
         
         try:
             filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches, height_inches)
