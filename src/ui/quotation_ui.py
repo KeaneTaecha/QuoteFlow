@@ -1389,12 +1389,14 @@ class QuotationApp(QMainWindow):
                 self.rounded_size_label.setText('N/A')
             elif is_other_table:
                 # For other table products with no dimensions, use find_rounded_other_table_size with price_id
-                rounded_size = self.price_loader.find_rounded_other_table_size(product, 0, price_id=price_id)
-                if not rounded_size:
+                try:
+                    rounded_size = self.price_loader.find_rounded_other_table_size(product, 0, price_id=price_id)
+                except Exception:
                     self.unit_price_label.setText('N/A')
                     self.total_price_label.setText('฿ 0.00')
                     self.rounded_size_label.setText('N/A')
                     return
+                
                 self.rounded_size_label.setText(rounded_size)
                 # Get price using the rounded size
                 unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
@@ -1409,24 +1411,13 @@ class QuotationApp(QMainWindow):
             height_inches = convert_dimension_to_inches(height, unit)
             
             # Find the rounded height that matches database (for other tables, size is stored in height column)
-            rounded_height = self.price_loader.find_rounded_price_per_foot_width(product, height_inches)
-            
-            # Fallback: if lookup fails, try swapping width and height (user might have swapped them)
-            if not rounded_height:
-                rounded_height = self.price_loader.find_rounded_price_per_foot_width(product, width_inches)
-                if rounded_height:
-                    # Swap worked, swap the values and show warning
-                    width_inches, height_inches = height_inches, width_inches
-                    QMessageBox.warning(
-                        self,
-                        'Dimensions Swapped',
-                        f'⚠ Warning: Width and height appear to be swapped.\nUsing {width_inches}" x {height_inches}" instead.'
-                    )
-                else:
-                    self.unit_price_label.setText('N/A')
-                    self.total_price_label.setText('฿ 0.00')
-                    self.rounded_size_label.setText('N/A')
-                    return
+            try:
+                rounded_height = self.price_loader.find_rounded_price_per_foot_width(product, height_inches)
+            except Exception:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
             
             # Display the rounded width and height
             self.rounded_size_label.setText(f'{width_inches}" x {rounded_height}"')
@@ -1441,8 +1432,9 @@ class QuotationApp(QMainWindow):
             size_inches = convert_dimension_to_inches(size, unit)
             
             # Find the rounded up size for pricing
-            rounded_size = self.price_loader.find_rounded_other_table_size(product, size_inches)
-            if not rounded_size:
+            try:
+                rounded_size = self.price_loader.find_rounded_other_table_size(product, size_inches)
+            except Exception:
                 self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')
                 self.rounded_size_label.setText('N/A')
@@ -1470,26 +1462,19 @@ class QuotationApp(QMainWindow):
             height_inches = convert_dimension_to_inches(height, unit)
             
             # Find the rounded up size for pricing
-            rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
+            try:
+                rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
+            except Exception:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
             
-            # If no rounded size found, try to get price directly (for exceeded dimensions)
-            if not rounded_size:
-                # Try to get price directly with the original dimensions
-                unit_price = self.price_loader.get_price_for_default_table(product, finish, f'{width_inches}" x {height_inches}"', with_damper, special_color_multiplier)
-                if unit_price == 0:
-                    self.unit_price_label.setText('N/A')
-                    self.total_price_label.setText('฿ 0.00')
-                    self.rounded_size_label.setText('N/A')
-                    return
-                else:
-                    # Display the original size for exceeded dimensions (width x height format)
-                    self.rounded_size_label.setText(f'{width_inches}" x {height_inches}"')
-            else:
-                # Display the rounded size (already in width x height format)
-                self.rounded_size_label.setText(rounded_size)
-                
-                # Get price using the rounded size (format: width x height)
-                unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            # Display the rounded size
+            self.rounded_size_label.setText(rounded_size)
+            
+            # Get price using the rounded size
+            unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
         
         # Apply discount
         if unit_price is None:
