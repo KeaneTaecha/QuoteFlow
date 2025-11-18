@@ -48,7 +48,7 @@ class PriceCalculator:
             return False
         value_str = str(value).strip()
         # Check if it contains equation-like patterns
-        equation_indicators = ['TB', 'WD', 'WIDTH', 'HEIGHT', 'SIZE', '(', ')', '+', '-', '*', '/', 'sqrt', 'max', 'min', 'round', 'abs', 'ceil', 'floor', 'pow']
+        equation_indicators = ['TB', 'WD', 'SIZE', '(', ')', '+', '-', '*', '/', 'sqrt', 'max', 'min', 'round', 'abs', 'ceil', 'floor', 'pow']
         return any(indicator in value_str for indicator in equation_indicators)
     
     def _calculate_hand_gear_addition(self, width, height, base_price):
@@ -102,13 +102,15 @@ class PriceCalculator:
             print(f"⚠ Warning: Error applying modifier: {e}")
             return default_value
     
-    def _apply_tb_modifier(self, tb_modifier, tb_price, wd_price, variables):
+    def _apply_tb_modifier(self, tb_modifier, variables):
         """Apply TB modifier to calculate base price (BP)"""
+        tb_price = variables.get('TB', 0)
         return self._apply_modifier(tb_modifier, tb_price, variables, tb_price)
     
-    def _apply_wd_multiplier(self, wd_multiplier, wd_price, variables):
-        """Apply WD multiplier to calculate modified WD price (MWD)"""
-        return self._apply_modifier(wd_multiplier, wd_price, variables, wd_price)
+    def _apply_wd_modifier(self, wd_modifier, variables):
+        """Apply WD modifier to calculate modified WD price (MWD)"""
+        wd_price = variables.get('WD', 0)
+        return self._apply_modifier(wd_modifier, wd_price, variables, wd_price)
 
     def _apply_pricing_logic(self, finish_multiplier, damper_multiplier, variables, with_damper=False):
         """Apply pricing logic: equations, multipliers, or fallback to base prices"""
@@ -149,6 +151,106 @@ class PriceCalculator:
         
         # No finish multiplier, return base price
         return int(base_price + 0.5)
+    
+    def _load_product_data(self, product):
+        """
+        Load and extract product data from the database.
+        
+        Args:
+            product: Product model name
+            
+        Returns:
+            Tuple of (table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier)
+            
+        Raises:
+            ProductNotFoundError: If product data not found
+        """
+        product_data = self.db.get_product_data(product)
+        if not product_data:
+            raise ProductNotFoundError(f'Product data not found for {product}')
+        
+        table_id = product_data[0]
+        tb_modifier = product_data[1]
+        anodized_multiplier = product_data[2]
+        powder_coated_multiplier = product_data[3]
+        wd_modifier = product_data[4]
+        
+        return table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier
+    
+    def _calculate_final_price_from_base_prices(self, tb_price, wd_price, tb_modifier, anodized_multiplier, 
+                                                 powder_coated_multiplier, wd_modifier, finish, with_damper=False, 
+                                                 special_color_multiplier=1.0):
+        """
+        Calculate final price from base TB and WD prices using modifiers and finish multipliers.
+        This is a shared helper function used by get_price_for_other_table, get_price_for_default_table,
+        and get_price_for_price_per_foot.
+        
+        Args:
+            tb_price: Table base price (TB)
+            wd_price: With damper price (WD)
+            tb_modifier: TB modifier from product data
+            anodized_multiplier: Anodized multiplier from product data
+            powder_coated_multiplier: Powder coated multiplier from product data
+            wd_modifier: WD modifier from product data
+            finish: Finish type
+            with_damper: Whether product has damper option
+            special_color_multiplier: Multiplier for special color finish
+            
+        Returns:
+            Final calculated price
+        """
+        # Create variables for TB modifier calculation
+        tb_variables = {
+            'TB': tb_price,
+            'WD': wd_price
+        }
+        
+        # Apply TB modifier to calculate base price (BP)
+        bp_price = self._apply_tb_modifier(tb_modifier, tb_variables)
+        
+        # Create variables for WD multiplier calculation
+        wd_variables = {
+            'TB': tb_price,
+            'WD': wd_price,
+            'BP': bp_price
+        }
+        
+        # Apply WD modifier to calculate modified WD price (MWD)
+        modified_wd_price = self._apply_wd_modifier(wd_modifier, wd_variables)
+        
+        # Determine which multiplier/equation to use based on finish and damper option
+        finish_multiplier = None
+        wd_modifier_value = None
+        
+        # Get finish multiplier
+        # Handle None finish (no finish applied, multiplier stays 1.0)
+        if finish is None:
+            finish_multiplier = None  # Will result in multiplier 1.0
+        elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
+            finish_multiplier = anodized_multiplier
+        elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
+            # Powder Coated uses the same multiplier regardless of color
+            finish_multiplier = powder_coated_multiplier
+        elif finish and 'Special Color' in finish:
+            # Use the user-provided multiplier for special colors
+            finish_multiplier = special_color_multiplier
+        
+        # Get WD modifier
+        if wd_modifier is not None:
+            wd_modifier_value = wd_modifier
+        
+        # Calculate final price
+        variables = {
+            'TB': tb_price,           # TB remains the original table price
+            'WD': wd_price,           # WD remains the original with-damper price
+            'BP': bp_price,           # BP (Base Price) is the calculated value from TB modifier
+            'MWD': modified_wd_price, # MWD (Modified WD) is the calculated value from WD multiplier
+        }
+        
+        # Apply pricing logic with both multipliers
+        final_price = self._apply_pricing_logic(finish_multiplier, wd_modifier_value, variables, with_damper)
+        
+        return final_price
 
     
     def _get_exceeded_dimension_multiplier(self, table_id, width, height, with_damper=False):
@@ -210,75 +312,34 @@ class PriceCalculator:
             Calculated price
             
         Raises:
-            ProductNotFoundError: If product multipliers or table_id not found
+            ProductNotFoundError: If product data not found
             PriceNotFoundError: If price_per_foot not found
         """
-        # Get product multipliers
-        multipliers = self.db.get_product_multipliers(product)
-        if not multipliers:
-            raise ProductNotFoundError(f'Product multipliers not found for {product}')
-        
-        anodized_multiplier = multipliers[0]
-        powder_coated_multiplier = multipliers[1]
-        
-        # Get table_id
-        table_id = self.db.get_table_id(product)
-        if table_id is None:
-            raise ProductNotFoundError(f'Table ID not found for product {product}')
+        # Load product data
+        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier = self._load_product_data(product)
         
         # Get price_per_foot
         # Note: 'width' parameter is actually the size value stored in SQL height column
         if price_id is not None:
             price_per_foot = self.db.get_price_per_foot(table_id, 0, price_id)
         else:
-            size_int = int(width)  # This is the size from SQL height column
-            price_per_foot = self.db.get_price_per_foot(table_id, size_int)
+            price_per_foot = self.db.get_price_per_foot(table_id, width)
         
         if price_per_foot is None:
             raise PriceNotFoundError(f'Price per foot not found for product {product}')
         
         # Calculate base price: (height / 12) * price_per_foot
         # Note: 'height' parameter is the dimension to multiply with price_per_foot
-        base_price = (height / 12) * price_per_foot
+        # For price_per_foot, we use the calculated base_price as both TB and WD
+        tb_price = (height / 12) * price_per_foot
+        wd_price = tb_price  # Price per foot products use the same base for both
         
-        # Apply finish multiplier
-        finish_multiplier = 1.0
-        # Handle None finish (no finish applied, multiplier stays 1.0)
-        if finish is None:
-            finish_multiplier = 1.0
-        elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
-            if self._is_equation(anodized_multiplier):
-                variables = {
-                    'BP': base_price,
-                    'WIDTH': width,
-                    'HEIGHT': height
-                }
-                try:
-                    finish_multiplier = self.equation_parser.parse_equation(str(anodized_multiplier), variables)
-                except Exception as e:
-                    print(f"⚠ Warning: Error evaluating anodized equation: {e}")
-                    finish_multiplier = 1.0
-            elif self._is_number(anodized_multiplier):
-                finish_multiplier = float(anodized_multiplier)
-        elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
-            if self._is_equation(powder_coated_multiplier):
-                variables = {
-                    'BP': base_price,
-                    'WIDTH': width,
-                    'HEIGHT': height
-                }
-                try:
-                    finish_multiplier = self.equation_parser.parse_equation(str(powder_coated_multiplier), variables)
-                except Exception as e:
-                    print(f"⚠ Warning: Error evaluating powder coated equation: {e}")
-                    finish_multiplier = 1.0
-            elif self._is_number(powder_coated_multiplier):
-                finish_multiplier = float(powder_coated_multiplier)
-        elif finish and 'Special Color' in finish:
-            finish_multiplier = special_color_multiplier
-        
-        final_price = base_price * finish_multiplier
-        return int(final_price + 0.5)
+        # Use shared helper function to calculate final price
+        return self._calculate_final_price_from_base_prices(
+            tb_price, wd_price, tb_modifier, anodized_multiplier,
+            powder_coated_multiplier, wd_modifier, finish, with_damper,
+            special_color_multiplier
+        )
     
     def find_rounded_price_per_foot_width(self, product, width):
         """Find the exact match first, then the next available width that is >= the given width for price_per_foot products
@@ -311,16 +372,8 @@ class PriceCalculator:
         width = int(float(size_match.group(1)))
         height = int(float(size_match.group(2)))
         
-        # Get product data
-        product_data = self.db.get_product_data(product)
-        if not product_data:
-            raise ProductNotFoundError(f'Product data not found for {product}')
-        
-        table_id = product_data[0]
-        tb_modifier = product_data[1]
-        anodized_multiplier = product_data[2]
-        powder_coated_multiplier = product_data[3]
-        wd_multiplier = product_data[4]
+        # Load product data
+        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier = self._load_product_data(product)
         
         # Special case for Model VD: Check for oversized dimensions first
         if product == 'VD':
@@ -349,62 +402,12 @@ class PriceCalculator:
             tb_price = price_result[0] if price_result[0] is not None else 0  # Table base price
             wd_price = price_result[1] if price_result[1] is not None else 0   # With damper price
         
-        # Create variables for calculations
-        tb_variables = {
-            'TB': tb_price,
-            'WD': wd_price,
-            'WIDTH': width,
-            'HEIGHT': height
-        }
-        
-        # Apply TB modifier to calculate base price (BP)
-        bp_price = self._apply_tb_modifier(tb_modifier, tb_price, wd_price, tb_variables)
-        
-        # Create variables for WD multiplier calculation
-        wd_variables = {
-            'TB': tb_price,
-            'WD': wd_price,
-            'BP': bp_price,
-            'WIDTH': width,
-            'HEIGHT': height
-        }
-        
-        # Apply WD multiplier to calculate modified WD price (MWD)
-        modified_wd_price = self._apply_wd_multiplier(wd_multiplier, wd_price, wd_variables)
-        
-        # Determine which multiplier/equation to use based on finish and damper option
-        finish_multiplier = None
-        wd_multiplier_value = None
-        
-        # Get finish multiplier
-        # Handle None finish (no finish applied, multiplier stays 1.0)
-        if finish is None:
-            finish_multiplier = None  # Will result in multiplier 1.0
-        elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
-            finish_multiplier = anodized_multiplier
-        elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
-            # Powder Coated uses the same multiplier regardless of color
-            finish_multiplier = powder_coated_multiplier
-        elif finish and 'Special Color' in finish:
-            # Use the user-provided multiplier for special colors
-            finish_multiplier = special_color_multiplier
-        
-        # Get WD multiplier
-        if wd_multiplier is not None:
-            wd_multiplier_value = wd_multiplier
-        
-        # Calculate final price
-        variables = {
-            'TB': tb_price,           # TB remains the original table price
-            'WD': wd_price,           # WD remains the original with-damper price
-            'BP': bp_price,           # BP (Base Price) is the calculated value from TB modifier
-            'MWD': modified_wd_price, # MWD (Modified WD) is the calculated value from WD multiplier
-            'WIDTH': width,
-            'HEIGHT': height
-        }
-        
-        # Apply pricing logic with both multipliers
-        final_price = self._apply_pricing_logic(finish_multiplier, wd_multiplier_value, variables, with_damper)
+        # Use shared helper function to calculate final price
+        final_price = self._calculate_final_price_from_base_prices(
+            tb_price, wd_price, tb_modifier, anodized_multiplier,
+            powder_coated_multiplier, wd_modifier, finish, with_damper,
+            special_color_multiplier
+        )
         
         # Special case for Model VD: Add hand gear calculation to final price
         if product == 'VD':
@@ -435,16 +438,8 @@ class PriceCalculator:
                 raise ValueError(f'Invalid diameter format: {diameter}')
             diameter = int(float(diameter_match.group(1)))
         
-        # Get product data
-        product_data = self.db.get_product_data(product)
-        if not product_data:
-            raise ProductNotFoundError(f'Product data not found for {product}')
-        
-        table_id = product_data[0]
-        tb_modifier = product_data[1]
-        anodized_multiplier = product_data[2]
-        powder_coated_multiplier = product_data[3]
-        wd_multiplier = product_data[4]
+        # Load product data
+        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier = self._load_product_data(product)
         
         # Query prices using the table_id and diameter
         price_result = self.db.get_price_for_diameter(table_id, diameter)
@@ -455,57 +450,12 @@ class PriceCalculator:
         tb_price = price_result[0] if price_result[0] is not None else 0  # Table base price
         wd_price = price_result[1] if price_result[1] is not None else 0   # With damper price
         
-        # Create variables for calculations
-        tb_variables = {
-            'TB': tb_price,
-            'WD': wd_price,
-            'SIZE': diameter
-        }
-        
-        # Apply TB modifier to calculate base price (BP)
-        bp_price = self._apply_tb_modifier(tb_modifier, tb_price, wd_price, tb_variables)
-        
-        # Create variables for WD multiplier calculation
-        wd_variables = {
-            'TB': tb_price,
-            'WD': wd_price,
-            'BP': bp_price,
-            'SIZE': diameter
-        }
-        
-        # Apply WD multiplier to calculate modified WD price (MWD)
-        modified_wd_price = self._apply_wd_multiplier(wd_multiplier, wd_price, wd_variables)
-        
-        # Determine which multiplier/equation to use based on finish and damper option
-        finish_multiplier = None
-        wd_multiplier_value = None
-        
-        # Get finish multiplier
-        # Handle None finish (no finish applied, multiplier stays 1.0)
-        if finish is None:
-            finish_multiplier = None  # Will result in multiplier 1.0
-        elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
-            finish_multiplier = anodized_multiplier
-        elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
-            # Powder Coated uses the same multiplier regardless of color
-            finish_multiplier = powder_coated_multiplier
-        elif finish and 'Special Color' in finish:
-            # Use the user-provided multiplier for special colors
-            finish_multiplier = special_color_multiplier
-        
-        # Get WD multiplier
-        if wd_multiplier is not None:
-            wd_multiplier_value = wd_multiplier
-        
-        # Calculate final price
-        variables = {
-            'TB': tb_price,           # TB remains the original table price
-            'WD': wd_price,           # WD remains the original with-damper price
-            'BP': bp_price,           # BP (Base Price) is the calculated value from TB modifier
-            'MWD': modified_wd_price, # MWD (Modified WD) is the calculated value from WD multiplier
-            'SIZE': diameter
-        }
-        return self._apply_pricing_logic(finish_multiplier, wd_multiplier_value, variables, with_damper)
+        # Use shared helper function to calculate final price
+        return self._calculate_final_price_from_base_prices(
+            tb_price, wd_price, tb_modifier, anodized_multiplier,
+            powder_coated_multiplier, wd_modifier, finish, with_damper,
+            special_color_multiplier
+        )
     
     def find_rounded_other_table_size(self, product, diameter, price_id=None):
         """Find the exact match first, then the next available diameter that is >= the given diameter for other table products
