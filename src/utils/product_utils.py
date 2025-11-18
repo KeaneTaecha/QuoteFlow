@@ -73,13 +73,22 @@ def extract_product_flags_and_filter(product_string: str) -> Tuple[str, bool, bo
             else:
                 filter_type = filter_part
 
-    if "(INS)" in product:
-        product = product.replace("(INS)", "").strip()
-        has_ins = True
-    
-    if "(WD)" in product:
-        product = product.replace("(WD)", "").strip()
+    # Handle combined flags "(WD,INS)" or "(INS,WD)" explicitly (treat as both flags present)
+    if "(WD,INS)" in product or "(INS,WD)" in product:
+        if "(WD,INS)" in product:
+            product = product.replace("(WD,INS)", "").strip()
+        if "(INS,WD)" in product:
+            product = product.replace("(INS,WD)", "").strip()
         has_wd = True
+        has_ins = True
+    else:
+        if "(INS)" in product:
+            product = product.replace("(INS)", "").strip()
+            has_ins = True
+        
+        if "(WD)" in product:
+            product = product.replace("(WD)", "").strip()
+            has_wd = True
 
     return product, has_wd, has_ins, filter_type
 
