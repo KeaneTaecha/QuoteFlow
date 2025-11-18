@@ -51,25 +51,34 @@ class PriceCalculator:
         equation_indicators = ['TB', 'WD', 'SIZE', '(', ')', '+', '-', '*', '/', 'sqrt', 'max', 'min', 'round', 'abs', 'ceil', 'floor', 'pow']
         return any(indicator in value_str for indicator in equation_indicators)
     
-    def _calculate_hand_gear_addition(self, width, height, base_price):
+    def get_hand_gear_price(self, product, width, height):
         """
-        Calculate hand gear addition for Model VD products.
+        Get hand gear price for VD, VD-G, and VD-M products.
         
         Args:
+            product: Product model name (VD, VD-G, or VD-M)
             width: Width dimension in inches
             height: Height dimension in inches
-            base_price: Base table price from price list
             
         Returns:
-            Total price including base price plus hand gear addition
+            Hand gear price amount (0 if product doesn't use hand gear)
         """
+        if product == 'VD-G':
+            hand_gear_price = 600
+        elif product == 'VD-M':
+            hand_gear_price = 700
+        elif product == 'VD':
+            # VD uses same calculation as VD-G (600)
+            hand_gear_price = 600
+        else:
+            return 0
+        
         # Hand gear calculation: rounded up(height/1500) x rounded up(width/1500) x hand gear price
         # Convert inches to mm using 25.4 factor
-        hand_gear_price = 600
         height_factor = math.ceil((height * 25.4) / 1500)
         width_factor = math.ceil((width * 25.4) / 1500)
         hand_gear_addition = height_factor * width_factor * hand_gear_price
-        return base_price + hand_gear_addition
+        return hand_gear_addition
     
 
     def _apply_modifier(self, modifier, base_value, variables, default_value=None):
@@ -375,10 +384,10 @@ class PriceCalculator:
         # Load product data
         table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier = self._load_product_data(product)
         
-        # Special case for Model VD: Check for oversized dimensions first
-        if product == 'VD':
+        # Special case for Model VD, VD-G and VD-M: Check for oversized dimensions first
+        if product in ['VD', 'VD-G', 'VD-M']:
             # Check for VD oversized dimensions using inch values directly
-            vd_oversized_price = self._calculate_vd_oversized_price(table_id, width, height, with_damper)
+            vd_oversized_price = self._calculate_vd_oversized_price(table_id, width, height, with_damper, product)
             if vd_oversized_price is not None:
                 # Use the VD oversized price directly
                 return int(vd_oversized_price + 0.5)
@@ -409,9 +418,6 @@ class PriceCalculator:
             special_color_multiplier
         )
         
-        # Special case for Model VD: Add hand gear calculation to final price
-        if product == 'VD':
-            final_price = self._calculate_hand_gear_addition(width, height, final_price)
         
         return final_price
     
@@ -481,12 +487,19 @@ class PriceCalculator:
         """Check if a product has a non-null WD multiplier in the header sheet"""
         return self.db.has_damper_option(product)
     
-    def _calculate_vd_oversized_price(self, table_id, width, height, with_damper=False):
+    def _calculate_vd_oversized_price(self, table_id, width, height, with_damper=False, product=None):
         """
-        Calculate price for VD products when dimensions exceed limits:
+        Calculate price for VD, VD-G and VD-M products when dimensions exceed limits:
         - Height > 40 inch or Width > 80 inch
         - Use maximum dimensions (40 inch height, 80 inch width) to calculate round-up multipliers
         - Find price for the divided dimensions and multiply by round-up numbers
+        
+        Args:
+            table_id: Table ID for database lookup
+            width: Width in inches
+            height: Height in inches
+            with_damper: Whether product has damper option
+            product: Product model name (VD, VD-G or VD-M) - kept for compatibility but not used
         """
         # Check if dimensions exceed VD limits (using inch values directly)
         height_exceeds = height > 40  # 40 inch
@@ -558,10 +571,7 @@ class PriceCalculator:
         # Calculate final price
         final_price = base_price * total_multiplier
         
-        # Add hand gear calculation for VD products
-        hand_gear_price = self._calculate_hand_gear_addition(width, height, final_price)
-        
-        return hand_gear_price
+        return final_price
     
     def __del__(self):
         """Clean up database connection when object is destroyed"""
