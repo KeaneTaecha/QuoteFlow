@@ -141,6 +141,9 @@ def build_quote_item(
         except ProductNotFoundError as e:
             return None, str(e)
         
+        if not has_price_per_foot:
+            return None, f'Product {product} has no dimensions but does not use price_per_foot pricing'
+        
         if has_price_per_foot:
             if height is None:
                 return None, f'Height is required for price_per_foot product {product}'
@@ -162,31 +165,6 @@ def build_quote_item(
             
             unit_price = price_after_finish + filter_price + ins_price
             table_price = price_after_finish
-        else:
-            # Handle as diameter-based (other_table) product
-            try:
-                rounded_size = price_loader.find_rounded_other_table_size(product, 0, price_id=price_id)
-            except SizeNotFoundError as e:
-                return None, str(e)
-            try:
-                table_price = price_loader.get_price_for_other_table(product, None, rounded_size, has_wd, 1.0)
-            except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
-                return None, str(e)
-            try:
-                price_after_finish = price_loader.get_price_for_other_table(product, finish, rounded_size, has_wd, special_color_multiplier)
-            except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
-                return None, str(e)
-            
-            # Extract diameter from rounded_size for filter calculation
-            diameter_match = re.search(r'(\d+(?:\.\d+)?)', rounded_size)
-            size_inches = float(diameter_match.group(1)) if diameter_match else 0
-            
-            try:
-                filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, False, size_inches=size_inches)
-            except ValueError as e:
-                return None, str(e)
-            
-            unit_price = price_after_finish + filter_price
         
     # Handle price_per_foot products
     elif has_price_per_foot:
