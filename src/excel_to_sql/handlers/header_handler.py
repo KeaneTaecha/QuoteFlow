@@ -19,6 +19,7 @@ class HeaderTableHandler:
             'tb_modifier': ['tb modifier', 'tb_modifier', 'tb modifier equation', 'tb_modifier_equation', 'base price modifier', 'base_price_modifier', 'bp modifier', 'bp_modifier'],
             'anodized': ['anodized', 'aluminum', 'anodized aluminum', 'anodized multiplier', 'anodized multiplier', 'anodized aluminum multiplier'],
             'powder_coated': ['powder coated', 'powder_coated', 'powder', 'coated', 'powder coated multiplier', 'powdercoated'],
+            'no_finish': ['no finish', 'no_finish', 'no finish multiplier', 'no_finish_multiplier', 'raw', 'raw multiplier', 'unfinished', 'unfinished multiplier'],
             'wd': ['wd', 'with damper', 'with_damper', 'wd multiplier', 'wd equation', 'damper', 'damper multiplier', 'damper equation']
         }
     
@@ -191,6 +192,7 @@ class HeaderTableHandler:
             tb_modifier = self._get_cell_value(sheet, row, column_mapping.get('tb_modifier'))
             anodized_multiplier = self._get_cell_value(sheet, row, column_mapping.get('anodized'))
             powder_coated_multiplier = self._get_cell_value(sheet, row, column_mapping.get('powder_coated'))
+            no_finish_multiplier = self._get_cell_value(sheet, row, column_mapping.get('no_finish'))
             wd_multiplier = self._get_cell_value(sheet, row, column_mapping.get('wd'))
             
             # Skip rows with missing essential data (table_id is no longer required from Excel)
@@ -206,6 +208,7 @@ class HeaderTableHandler:
             # Parse multipliers (can be numbers or equations)
             anodized_multipliers = self._parse_multipliers(anodized_multiplier)
             powder_coated_multipliers = self._parse_multipliers(powder_coated_multiplier)
+            no_finish_multipliers = self._parse_multipliers(no_finish_multiplier)
             wd_multipliers = self._parse_multipliers(wd_multiplier)
             
             # Adjust TB modifier list to match model count
@@ -225,6 +228,11 @@ class HeaderTableHandler:
             elif len(powder_coated_multipliers) > 0 and len(powder_coated_multipliers) < len(models):
                 powder_coated_multipliers.extend([powder_coated_multipliers[-1]] * (len(models) - len(powder_coated_multipliers)))
             
+            if len(no_finish_multipliers) == 1:
+                no_finish_multipliers = no_finish_multipliers * len(models)
+            elif len(no_finish_multipliers) > 0 and len(no_finish_multipliers) < len(models):
+                no_finish_multipliers.extend([no_finish_multipliers[-1]] * (len(models) - len(no_finish_multipliers)))
+            
             if len(wd_multipliers) == 1:
                 wd_multipliers = wd_multipliers * len(models)
             elif len(wd_multipliers) > 0 and len(wd_multipliers) < len(models):
@@ -237,6 +245,7 @@ class HeaderTableHandler:
                 'tb_modifiers': tb_modifiers,
                 'anodized_multipliers': anodized_multipliers,
                 'powder_coated_multipliers': powder_coated_multipliers,
+                'no_finish_multipliers': no_finish_multipliers,
                 'wd_multipliers': wd_multipliers
             }
             

@@ -1085,6 +1085,7 @@ class QuotationApp(QMainWindow):
             self.show_hide_widgets(self.powder_color_layout, finish == 'Powder Coated')
             self.show_hide_widgets(self.special_color_layout, finish == 'Special Color')
             self.show_hide_widgets(self.special_color_multiplier_layout, finish == 'Special Color')
+            # No Finish doesn't need any special widgets, so no additional handling needed
         
         self.update_price_display()
     
@@ -1225,6 +1226,7 @@ class QuotationApp(QMainWindow):
             self.show_hide_widgets(self.powder_color_layout, finish == 'Powder Coated')
             self.show_hide_widgets(self.special_color_layout, finish == 'Special Color')
             self.show_hide_widgets(self.special_color_multiplier_layout, finish == 'Special Color')
+            # No Finish doesn't need any special widgets, so no additional handling needed
         
         self.update_price_display()
     

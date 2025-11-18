@@ -423,15 +423,17 @@ class ExcelItemImporter:
         if not finishes:
             return {'success': False, 'error': f'No finishes available for product "{product}"'}
         
-        # Check if finish column was empty in Excel
-        finish_was_empty = finish_from_excel is None or (isinstance(finish_from_excel, str) and not finish_from_excel.strip())
-        
         # Determine which finish to use and extract special color multiplier
         finish, special_color_multiplier = self._match_finish(finish_from_excel, finishes)
         
-        # If finish column was empty, keep finish as None with multiplier 1.0 (no finish applied)
+        # Check if finish column was empty - if so, use "No Finish" if available
+        finish_was_empty = finish_from_excel is None or (isinstance(finish_from_excel, str) and not finish_from_excel.strip())
+        if finish is None and finish_was_empty and 'No Finish' in finishes:
+            finish = 'No Finish'
+            special_color_multiplier = 1.0
+        
         # If finish was provided but doesn't match, return error
-        if finish is None and not finish_was_empty:
+        if finish is None:
             return {'success': False, 'error': f'Finish "{finish_from_excel}" not available for product "{product}". Available finishes: {", ".join(finishes)}'}
         
         # Determine size for other_table products
@@ -481,17 +483,16 @@ class ExcelItemImporter:
         Returns:
             tuple: (finish_name, multiplier) where multiplier is 1.0 for non-special colors
         """
-        # If finish is None, empty string, or whitespace, use first finish with multiplier 1.0
+        # If finish is None, empty string, or whitespace, return None (will be handled by caller)
         if not finish_from_excel or (isinstance(finish_from_excel, str) and not finish_from_excel.strip()):
             return (None, 1.0)
         
         finish_str = str(finish_from_excel).strip()
-        # If after stripping it's empty, use first finish with multiplier 1.0
+        # If after stripping it's empty, return None (will be handled by caller)
         if not finish_str:
             return (None, 1.0)
         
-        finish_lower = finish_str.lower()
-        
+        finish_lower = finish_str.lower()  
         # Define powder coated sub-colors that should return "Powder Coated - sub color"
         colors = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์']
         
@@ -499,9 +500,16 @@ class ExcelItemImporter:
         powder_keywords = ['ขาวนวล', 'ขาวเงา', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ขาวบริสุทธิ์', 'ดำเงา', 'ดำด้าน', 'บรอนส์', 'บรอนซ์', 'สีอบขาว']
         anodized_keywords = ['anodized', 'aluminum', 'anodized aluminum', 'anodised', 'aluminium', 'anodised aluminium', 'สีอลูมิเนียม']
         
-        
+        # Check for "No Finish" keywords first
+        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished']
+        if any(keyword in finish_lower for keyword in no_finish_keywords):
+            if 'No Finish' in finishes:
+                return ('No Finish', 1.0)
+            else:
+                return (None, 1.0)
+     
         # Check for Powder Coated
-        if any(keyword in finish_lower for keyword in powder_keywords):
+        elif any(keyword in finish_lower for keyword in powder_keywords):
             if 'Powder Coated' in finishes:
                 # Check if this is a specific sub-color that should return "Powder Coated - sub color"
                 if finish_str in colors:

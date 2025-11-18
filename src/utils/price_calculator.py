@@ -169,7 +169,7 @@ class PriceCalculator:
             product: Product model name
             
         Returns:
-            Tuple of (table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier)
+            Tuple of (table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier)
             
         Raises:
             ProductNotFoundError: If product data not found
@@ -182,12 +182,13 @@ class PriceCalculator:
         tb_modifier = product_data[1]
         anodized_multiplier = product_data[2]
         powder_coated_multiplier = product_data[3]
-        wd_modifier = product_data[4]
+        no_finish_multiplier = product_data[4]
+        wd_modifier = product_data[5]
         
-        return table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier
+        return table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier
     
     def _calculate_final_price_from_base_prices(self, tb_price, wd_price, tb_modifier, anodized_multiplier, 
-                                                 powder_coated_multiplier, wd_modifier, finish, with_damper=False, 
+                                                 powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper=False, 
                                                  special_color_multiplier=1.0):
         """
         Calculate final price from base TB and WD prices using modifiers and finish multipliers.
@@ -200,6 +201,7 @@ class PriceCalculator:
             tb_modifier: TB modifier from product data
             anodized_multiplier: Anodized multiplier from product data
             powder_coated_multiplier: Powder coated multiplier from product data
+            no_finish_multiplier: No finish multiplier from product data
             wd_modifier: WD modifier from product data
             finish: Finish type
             with_damper: Whether product has damper option
@@ -235,6 +237,8 @@ class PriceCalculator:
         # Handle None finish (no finish applied, multiplier stays 1.0)
         if finish is None:
             finish_multiplier = None  # Will result in multiplier 1.0
+        elif finish == 'No Finish' and no_finish_multiplier is not None:
+            finish_multiplier = no_finish_multiplier
         elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
             finish_multiplier = anodized_multiplier
         elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
@@ -325,7 +329,7 @@ class PriceCalculator:
             PriceNotFoundError: If price_per_foot not found
         """
         # Load product data
-        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier = self._load_product_data(product)
+        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier = self._load_product_data(product)
         
         # Get price_per_foot
         # Note: 'width' parameter is actually the size value stored in SQL height column
@@ -346,7 +350,7 @@ class PriceCalculator:
         # Use shared helper function to calculate final price
         return self._calculate_final_price_from_base_prices(
             tb_price, wd_price, tb_modifier, anodized_multiplier,
-            powder_coated_multiplier, wd_modifier, finish, with_damper,
+            powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
             special_color_multiplier
         )
     
@@ -382,7 +386,7 @@ class PriceCalculator:
         height = int(float(size_match.group(2)))
         
         # Load product data
-        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier = self._load_product_data(product)
+        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier = self._load_product_data(product)
         
         # Special case for Model VD, VD-G and VD-M: Check for oversized dimensions first
         if product in ['VD', 'VD-G', 'VD-M']:
@@ -414,7 +418,7 @@ class PriceCalculator:
         # Use shared helper function to calculate final price
         final_price = self._calculate_final_price_from_base_prices(
             tb_price, wd_price, tb_modifier, anodized_multiplier,
-            powder_coated_multiplier, wd_modifier, finish, with_damper,
+            powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
             special_color_multiplier
         )
         
@@ -445,7 +449,7 @@ class PriceCalculator:
             diameter = int(float(diameter_match.group(1)))
         
         # Load product data
-        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, wd_modifier = self._load_product_data(product)
+        table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier = self._load_product_data(product)
         
         # Query prices using the table_id and diameter
         price_result = self.db.get_price_for_diameter(table_id, diameter)
@@ -459,7 +463,7 @@ class PriceCalculator:
         # Use shared helper function to calculate final price
         return self._calculate_final_price_from_base_prices(
             tb_price, wd_price, tb_modifier, anodized_multiplier,
-            powder_coated_multiplier, wd_modifier, finish, with_damper,
+            powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
             special_color_multiplier
         )
     
