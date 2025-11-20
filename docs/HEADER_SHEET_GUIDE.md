@@ -12,7 +12,7 @@ The Header sheet must contain the following columns:
 | **Table id** | Unique identifier for each price table | 1, 2, 3, etc. |
 | **Sheet** | Name of the Excel sheet containing the price table | "1-HRG,2-WSG TB" |
 | **Model** | Product model(s) for this table (comma-separated) | "1-HRG, 2-WSG" or "1-HRG" |
-| **TB Modifier** | Equation or multiplier to calculate base price (BP) from table price | "TB*1.2", "TB+50", "1.5" |
+| **Base Modifier** (formerly **TB Modifier**) | Equation or multiplier to calculate base price (BP) from table price | "TB*1.2", "TB+50", "1.5" |
 | **Anodized Multiplier** | Price multiplier for Anodized Aluminum finish | 1.2, 1.3, etc. |
 | **Powder Coated Multiplier** | Price multiplier for White Powder Coated finish | 1.35, 1.4, etc. |
 | **WD** | With Damper equation or multiplier (can reference BP) | "BP*1.1", "TB+BP*0.5", "1.2" |
@@ -20,7 +20,7 @@ The Header sheet must contain the following columns:
 ### Example Header Sheet
 
 ```
-| Table id | Sheet           | Model          | TB Modifier | Anodized Multiplier | Powder Coated Multiplier | WD |
+| Table id | Sheet           | Model          | Base Modifier | Anodized Multiplier | Powder Coated Multiplier | WD |
 |----------|-----------------|----------------|-------------|---------------------|-------------------------|-----|
 | 1        | 1-HRG,2-WSG TB  | 1-HRG, 2-WSG  | TB*1.1      | 1.2                 | 1.35                    | BP*1.05 |
 | 2        | 1-AL, 1-RAL Alu | 1-AL          | 1.15        | 1.25                | 1.4                     | 1.1 |
@@ -153,9 +153,9 @@ Result: Both "1-HRG" and "2-WSG" appear in the UI dropdown
 
 ## Price Calculation Flow
 
-### 1. **TB Modifier (Base Price Calculation)**
-The TB Modifier is applied first to calculate the base price (BP) from the table price (TB):
-- **TB Modifier**: Can be a simple multiplier (e.g., "1.2") or an equation (e.g., "TB*1.1", "TB+50")
+### 1. **Base Modifier (Base Price Calculation)**
+The Base Modifier (formerly TB Modifier) is applied first to calculate the base price (BP) from the table price (TB):
+- **Base Modifier**: Can be a simple multiplier (e.g., "1.2") or an equation (e.g., "TB*1.1", "TB+50")
 - **Result**: Creates the Base Price (BP) which can be referenced in other equations
 - **Variables Available**: TB (table price), WD (with damper price), WIDTH, HEIGHT
 
@@ -175,20 +175,20 @@ These multipliers are applied when loading prices from the database. The multipl
 
 ## Available Variables in Equations
 
-When writing equations for TB Modifier or WD columns, you can use these variables:
+When writing equations for Base Modifier or WD columns, you can use these variables:
 
 | Variable | Description | Example Value |
 |----------|-------------|---------------|
 | **TB** | Original table price (unchanged) | 100 |
 | **WD** | Original with-damper price (unchanged) | 120 |
-| **BP** | Base price calculated from TB modifier | 110 (if TB modifier = "TB*1.1") |
+| **BP** | Base price calculated from Base Modifier | 110 (if Base Modifier = "TB*1.1") |
 | **MWD** | Modified WD price calculated from WD equation | 130 (if WD = "BP*1.18") |
 | **WIDTH** | Product width in inches | 24 |
 | **HEIGHT** | Product height in inches | 36 |
 
 ### Example Calculation Flow:
 1. TB = 100 (original table price)
-2. TB Modifier = "TB*1.1" → BP = 110
+2. Base Modifier = "TB*1.1" → BP = 110
 3. WD Equation = "BP*1.18" → MWD = 129.8
 4. Finish Multiplier = 1.5 → Final Price = 194.7 (when with_damper=True)
 

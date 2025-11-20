@@ -73,12 +73,18 @@ def extract_product_flags_and_filter(product_string: str) -> Tuple[str, bool, bo
             else:
                 filter_type = filter_part
 
-    # Handle combined flags "(WD,INS)" or "(INS,WD)" explicitly (treat as both flags present)
-    if "(WD,INS)" in product or "(INS,WD)" in product:
-        if "(WD,INS)" in product:
-            product = product.replace("(WD,INS)", "").strip()
-        if "(INS,WD)" in product:
-            product = product.replace("(INS,WD)", "").strip()
+    # Handle combined flags like "(WD,INS)", "(INS,WD)", or variants missing parentheses/spaces
+    combined_flag_patterns = [
+        r'\(?\s*WD\s*,\s*INS\s*\)?$',
+        r'\(?\s*INS\s*,\s*WD\s*\)?$'
+    ]
+    combined_match_found = False
+    for pattern in combined_flag_patterns:
+        if re.search(pattern, product, flags=re.IGNORECASE):
+            product = re.sub(pattern, '', product, flags=re.IGNORECASE).strip()
+            combined_match_found = True
+            break
+    if combined_match_found:
         has_wd = True
         has_ins = True
     else:
