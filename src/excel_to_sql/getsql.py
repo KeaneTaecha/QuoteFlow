@@ -134,7 +134,6 @@ class ExcelToSQLiteConverter:
     def detect_table_at_position(self, sheet, start_row: int, start_col: int, 
                             processed_areas: Set[Tuple[int, int]], model_names=None) -> Optional[TableLocation]:
         """Detect a table at a specific position and return its boundaries"""
-        print(f"Detecting table at position: {start_row}, {start_col}")
         # Check if this area was already processed
         if (start_row, start_col) in processed_areas:
             return None
@@ -193,7 +192,6 @@ class ExcelToSQLiteConverter:
                         cell_str = str(below_value).strip() if below_value is not None else ""
                         
                         if self.is_inch_value(below_value) or (model_names and cell_str and cell_str in model_names):
-                            print(f"Found valid value: {below_value}")
                             # Found an inch value or model name - reset disruption count and increment values
                             values_found += 1
                             consecutive_disruptions = 0
