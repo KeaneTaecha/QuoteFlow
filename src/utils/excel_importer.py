@@ -493,29 +493,23 @@ class ExcelItemImporter:
             return (None, 1.0)
         
         finish_lower = finish_str.lower()  
-        # Define powder coated sub-colors that should return "Powder Coated - sub color"
-        colors = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์']
-        
-        # Define keywords for each finish type (includes sub-colors and general keywords)
-        powder_keywords = ['ขาวนวล', 'ขาวเงา', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ขาวบริสุทธิ์', 'ดำเงา', 'ดำด้าน', 'บรอนส์', 'บรอนซ์', 'สีอบขาว']
+        # Define keywords for Powder Coated finish (used for both substring matching and exact sub-color matching)
+        powder_keywords = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์']
         anodized_keywords = ['anodized', 'aluminum', 'anodized aluminum', 'anodised', 'aluminium', 'anodised aluminium', 'สีอลูมิเนียม']
         
         # Check for "No Finish" keywords first
-        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished']
+        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished', 'สังกะสี']
+        
         if any(keyword in finish_lower for keyword in no_finish_keywords):
             if 'No Finish' in finishes:
-                return ('No Finish', 1.0)
+                return (f"No Finish - {finish_str}", 1.0)
             else:
                 return (None, 1.0)
      
         # Check for Powder Coated
         elif any(keyword in finish_lower for keyword in powder_keywords):
             if 'Powder Coated' in finishes:
-                # Check if this is a specific sub-color that should return "Powder Coated - sub color"
-                if finish_str in colors:
-                    return (f"Powder Coated - {finish_str}", 1.0)
-                else:
-                    return ('Powder Coated', 1.0)
+                return (f"Powder Coated - {finish_str}", 1.0)
             else:
                 # Powder Coated keywords matched but finish not available
                 return (None, 1.0)
@@ -523,7 +517,7 @@ class ExcelItemImporter:
         # Check for Anodized Aluminum
         elif any(keyword in finish_lower for keyword in anodized_keywords):
             if 'Anodized Aluminum' in finishes:
-                return ('Anodized Aluminum', 1.0)
+                return (f"Anodized Aluminum - {finish_str}", 1.0)
             else:
                 # Anodized Aluminum keywords matched but finish not available
                 return (None, 1.0)

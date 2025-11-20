@@ -237,9 +237,11 @@ class PriceCalculator:
         # Handle None finish (no finish applied, multiplier stays 1.0)
         if finish is None:
             finish_multiplier = None  # Will result in multiplier 1.0
-        elif finish == 'No Finish' and no_finish_multiplier is not None:
+        elif finish and 'No Finish' in finish and no_finish_multiplier is not None:
+            # No Finish uses the same multiplier regardless of finish_str
             finish_multiplier = no_finish_multiplier
-        elif finish == 'Anodized Aluminum' and anodized_multiplier is not None:
+        elif finish and 'Anodized Aluminum' in finish and anodized_multiplier is not None:
+            # Anodized Aluminum uses the same multiplier regardless of finish_str
             finish_multiplier = anodized_multiplier
         elif finish and 'Powder Coated' in finish and powder_coated_multiplier is not None:
             # Powder Coated uses the same multiplier regardless of color

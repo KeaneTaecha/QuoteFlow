@@ -89,16 +89,31 @@ class ExcelQuotationExporter:
         """Convert English finishing name to Thai
         
         Raises:
-            ValueError: If "Powder Coated" or "Special Color" is in finish but no sub-color is specified (no " - " separator)
+            ValueError: If "Powder Coated", "Anodized Aluminum", or "Special Color" is in finish but no sub-color is specified (no " - " separator)
         """
         if not finish:
             return ''
-        if 'Anodized' in finish:
-            return 'สีอลูมิเนียม'
+        if 'No Finish' in finish:
+            # Check if there's a finish_str after "No Finish - "
+            if ' - ' in finish:
+                finish_str = finish.split(' - ', 1)[1].strip()
+                # Return the finish_str if present and not empty, otherwise empty
+                return finish_str if finish_str else ''
+            else:
+                # No finish_str specified, return empty string
+                return ''
+        elif 'Anodized' in finish:
+            # Check if there's a finish_str after "Anodized Aluminum - "
+            if ' - ' in finish:
+                finish_str = finish.split(' - ', 1)[1].strip()
+                # Return the finish_str directly (already in Thai)
+                return finish_str
+            else:
+                raise ValueError(f'Anodized Aluminum finish must include a finish_str. Finish: "{finish}"')
         elif 'Powder Coated' in finish:
             # Check if there's a sub-color after "Powder Coated - "
             if ' - ' in finish:
-                color = finish.split(' - ', 1)[1]
+                color = finish.split(' - ', 1)[1].strip()
                 # Return the sub-color directly (already in Thai)
                 return color
             else:
@@ -106,7 +121,7 @@ class ExcelQuotationExporter:
         elif 'Special Color' in finish:
             # Extract the color name from "Special Color - ColorName" format
             if ' - ' in finish:
-                color = finish.split(' - ', 1)[1]
+                color = finish.split(' - ', 1)[1].strip()
                 return color
             else:
                 raise ValueError(f'Special Color finish must include a color name. Finish: "{finish}"')
