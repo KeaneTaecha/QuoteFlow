@@ -20,7 +20,6 @@ class OtherTableHandler:
             return True
         if model_names and cell_value is not None:
             cell_str = str(cell_value).strip()
-            print(f"Checking if {cell_str} is in {model_names}")
             return cell_str and cell_str in model_names
         return False
     
