@@ -274,7 +274,7 @@ def build_quote_item(
         # Add handgear addition to ins_price for VD, VD-G, and VD-M products
         # This allows handgear to be displayed separately in the INS column in Excel
         # Note: Handgear is no longer included in price_after_finish (removed from get_price_for_default_table)
-        if product in ['VD', 'VD-G', 'VD-M']:
+        if product in ['VD-G', 'VD-M']:
             hand_gear_addition = price_loader.get_hand_gear_price(product, width_inches, height_inches)
             ins_price = ins_price + hand_gear_addition
     
