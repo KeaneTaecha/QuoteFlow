@@ -196,8 +196,15 @@ class ExcelQuotationExporter:
         current_row = 14
         item_no = 1
         sub_total = 0
+        
+        # Get reference row height for consistency (use row 14 as reference)
+        reference_row_height = self.ws.row_dimensions[14].height if self.ws.row_dimensions[14].height else None
 
         for item in items:
+            # Set consistent row height for all product rows
+            if reference_row_height:
+                self.ws.row_dimensions[current_row].height = reference_row_height
+            
             if item.get('is_title', False):
                 # Title row - no ID number, show title in B column with bold, underline, and left alignment
                 self._safe_set_cell_value(f'A{current_row}', '', normal_font, center_alignment)
@@ -423,12 +430,14 @@ class ExcelQuotationExporter:
                 cell_m.value = f'=AE{current_row}'
                 cell_m.font = normal_font
                 cell_m.alignment = right_alignment
+                cell_m.number_format = '0.00'  # Format to 2 decimal places
                 
                 # AMOUNT in column Q - ราคาต่อหน่วย x จำนวน (M * K)
                 cell_q = self.ws[f'Q{current_row}']
                 cell_q.value = f'=M{current_row}*K{current_row}'
                 cell_q.font = normal_font
                 cell_q.alignment = right_alignment
+                cell_q.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Calculate item_total for footer (using AE value, but we'll calculate it after AE is set)
                 # We'll need to recalculate this after AE column is populated
@@ -443,7 +452,11 @@ class ExcelQuotationExporter:
                 # === PRICING BREAKDOWN TABLE STARTING AT COLUMN V ===
                 # Column V: List (table price)
                 table_price = item.get('table_price', 0.0)
-                self._safe_set_cell_value(f'V{current_row}', table_price, normal_font, right_alignment)
+                cell_v = self.ws[f'V{current_row}']
+                cell_v.value = table_price
+                cell_v.font = normal_font
+                cell_v.alignment = right_alignment
+                cell_v.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column W: พ่นส๊ (List * finish multiplier = price_after_finish)
                 price_after_finish = item.get('price_after_finish', 0.0)
@@ -461,18 +474,28 @@ class ExcelQuotationExporter:
                     cell_w.value = f'=IF(V{current_row}=0,{price_after_finish},V{current_row}*({price_after_finish}/V{current_row}))'
                 cell_w.font = normal_font
                 cell_w.alignment = right_alignment
+                cell_w.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column X: INS price
-                self._safe_set_cell_value(f'X{current_row}', ins_price, normal_font, right_alignment)
+                cell_x = self.ws[f'X{current_row}']
+                cell_x.value = ins_price
+                cell_x.font = normal_font
+                cell_x.alignment = right_alignment
+                cell_x.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column Y: Filter price
-                self._safe_set_cell_value(f'Y{current_row}', filter_price, normal_font, right_alignment)
+                cell_y = self.ws[f'Y{current_row}']
+                cell_y.value = filter_price
+                cell_y.font = normal_font
+                cell_y.alignment = right_alignment
+                cell_y.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column Z: subtotal (พ่นส๊ + INS + Filter)
                 cell_z = self.ws[f'Z{current_row}']
                 cell_z.value = f'=W{current_row}+X{current_row}+Y{current_row}'
                 cell_z.font = normal_font
                 cell_z.alignment = right_alignment
+                cell_z.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column AA: Discount (from column O)
                 # Copy discount value from column O to column AA for pricing breakdown
@@ -494,18 +517,28 @@ class ExcelQuotationExporter:
                 cell_ab.value = f'=Z{current_row}*(1-AA{current_row})'
                 cell_ab.font = normal_font
                 cell_ab.alignment = right_alignment
+                cell_ab.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column AC: ค่าสี (Color cost) - left blank for manual entry
-                self._safe_set_cell_value(f'AC{current_row}', '', normal_font, right_alignment)
+                cell_ac = self.ws[f'AC{current_row}']
+                cell_ac.value = ''
+                cell_ac.font = normal_font
+                cell_ac.alignment = right_alignment
+                cell_ac.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column AD: ค่าขนส่ง (Shipping cost) - left blank for manual entry
-                self._safe_set_cell_value(f'AD{current_row}', '', normal_font, right_alignment)
+                cell_ad = self.ws[f'AD{current_row}']
+                cell_ad.value = ''
+                cell_ad.font = normal_font
+                cell_ad.alignment = right_alignment
+                cell_ad.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column AE: รวมทั้งหมด (Grand Total) = Total + ค่าสี + ค่าขนส่ง
                 cell_ae = self.ws[f'AE{current_row}']
                 cell_ae.value = f'=AB{current_row}+AC{current_row}+AD{current_row}'
                 cell_ae.font = normal_font
                 cell_ae.alignment = right_alignment
+                cell_ae.number_format = '0.00'  # Format to 2 decimal places
                 
                 item_no += 1
             
@@ -593,8 +626,15 @@ class ExcelQuotationExporter:
         self.ws.insert_rows(insert_position, rows_to_insert)
         
         # === STEP 3: Copy formatting to newly inserted rows ===
+        # Get reference row height for consistency
+        reference_row_height = self.ws.row_dimensions[reference_row].height
+        
         for i in range(rows_to_insert):
             target_row = insert_position + i
+            
+            # Set consistent row height
+            if reference_row_height:
+                self.ws.row_dimensions[target_row].height = reference_row_height
             
             # Copy formatting for each column
             for col in range(1, 19):  # A to Q (columns 1-17, extended range)
