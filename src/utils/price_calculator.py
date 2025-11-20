@@ -66,10 +66,10 @@ class PriceCalculator:
         if product == 'VD-G':
             hand_gear_price = 600
         elif product == 'VD-M':
-            hand_gear_price = 700
+            hand_gear_price = 7000
         elif product == 'VD':
             # VD uses same calculation as VD-G (600)
-            hand_gear_price = 600
+            hand_gear_price = 0
         else:
             return 0
         
