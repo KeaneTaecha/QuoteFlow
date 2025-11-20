@@ -16,7 +16,7 @@ class HeaderTableHandler:
         self.column_keywords = {
             'sheet_name': ['sheet', 'sheet name', 'sheet_name', 'sheetname'],
             'model': ['model', 'models', 'product', 'product model'],
-            'tb_modifier': ['tb modifier', 'tb_modifier', 'tb modifier equation', 'tb_modifier_equation', 'base price modifier', 'base_price_modifier', 'bp modifier', 'bp_modifier'],
+            'base_modifier': ['tb modifier', 'tb_modifier', 'tb modifier equation', 'tb_modifier_equation', 'base modifier', 'base_modifier', 'base price modifier', 'base_price_modifier', 'bp modifier', 'bp_modifier'],
             'anodized': ['anodized', 'aluminum', 'anodized aluminum', 'anodized multiplier', 'anodized multiplier', 'anodized aluminum multiplier'],
             'powder_coated': ['powder coated', 'powder_coated', 'powder', 'coated', 'powder coated multiplier', 'powdercoated'],
             'no_finish': ['no finish', 'no_finish', 'no finish multiplier', 'no_finish_multiplier', 'raw', 'raw multiplier', 'unfinished', 'unfinished multiplier'],
@@ -189,7 +189,7 @@ class HeaderTableHandler:
             # Note: table_id is now auto-generated, not read from Excel
             sheet_name = self._get_cell_value(sheet, row, column_mapping.get('sheet_name'))
             model = self._get_cell_value(sheet, row, column_mapping.get('model'))
-            tb_modifier = self._get_cell_value(sheet, row, column_mapping.get('tb_modifier'))
+            base_modifier = self._get_cell_value(sheet, row, column_mapping.get('base_modifier'))
             anodized_multiplier = self._get_cell_value(sheet, row, column_mapping.get('anodized'))
             powder_coated_multiplier = self._get_cell_value(sheet, row, column_mapping.get('powder_coated'))
             no_finish_multiplier = self._get_cell_value(sheet, row, column_mapping.get('no_finish'))
@@ -203,7 +203,7 @@ class HeaderTableHandler:
             models = [m.strip() for m in str(model).split(',')]
             
             # Parse TB modifier (can be number or equation)
-            tb_modifiers = self._parse_multipliers(tb_modifier)
+            base_modifiers = self._parse_multipliers(base_modifier)
             
             # Parse multipliers (can be numbers or equations)
             anodized_multipliers = self._parse_multipliers(anodized_multiplier)
@@ -212,10 +212,10 @@ class HeaderTableHandler:
             wd_multipliers = self._parse_multipliers(wd_multiplier)
             
             # Adjust TB modifier list to match model count
-            if len(tb_modifiers) == 1:
-                tb_modifiers = tb_modifiers * len(models)
-            elif len(tb_modifiers) > 0 and len(tb_modifiers) < len(models):
-                tb_modifiers.extend([tb_modifiers[-1]] * (len(models) - len(tb_modifiers)))
+            if len(base_modifiers) == 1:
+                base_modifiers = base_modifiers * len(models)
+            elif len(base_modifiers) > 0 and len(base_modifiers) < len(models):
+                base_modifiers.extend([base_modifiers[-1]] * (len(models) - len(base_modifiers)))
             
             # Adjust multiplier lists to match model count
             if len(anodized_multipliers) == 1:
@@ -242,7 +242,7 @@ class HeaderTableHandler:
                 'table_id': table_id_counter,  # Auto-generated sequential ID
                 'sheet_name': str(sheet_name),
                 'models': models,
-                'tb_modifiers': tb_modifiers,
+                'base_modifiers': base_modifiers,
                 'anodized_multipliers': anodized_multipliers,
                 'powder_coated_multipliers': powder_coated_multipliers,
                 'no_finish_multipliers': no_finish_multipliers,

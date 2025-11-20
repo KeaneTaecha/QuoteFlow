@@ -189,17 +189,17 @@ class PriceDatabase:
     
     # Product data queries
     def get_product_data(self, product: str) -> Optional[Tuple]:
-        """Get product data (table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_multiplier)
+        """Get product data (table_id, base_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_multiplier)
         
         Returns:
-            Tuple of (table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_multiplier) or None
+            Tuple of (table_id, base_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_multiplier) or None
         """
         conn = self.get_connection()
         if not conn:
             return None
         
         cursor = conn.cursor()
-        cursor.execute('SELECT table_id, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_multiplier FROM products WHERE model = ? LIMIT 1', (product,))
+        cursor.execute('SELECT table_id, base_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_multiplier FROM products WHERE model = ? LIMIT 1', (product,))
         return cursor.fetchone()
     
     def get_product_multipliers(self, product: str) -> Optional[Tuple]:

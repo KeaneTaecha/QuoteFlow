@@ -59,7 +59,7 @@ class ExcelToSQLiteConverter:
                 table_id INTEGER NOT NULL,
                 model TEXT NOT NULL,
                 sheet_name TEXT NOT NULL,
-                tb_modifier TEXT,
+                base_modifier TEXT,
                 anodized_multiplier TEXT,
                 powder_coated_multiplier TEXT,
                 no_finish_multiplier TEXT,
@@ -295,21 +295,21 @@ class ExcelToSQLiteConverter:
         print(f"✓ Column mapping: {column_mapping}\n")
         return True
     
-    def insert_products(self, table_id, sheet_name, models, tb_modifiers, anodized_multipliers, powder_coated_multipliers, no_finish_multipliers, wd_multipliers):
+    def insert_products(self, table_id, sheet_name, models, base_modifiers, anodized_multipliers, powder_coated_multipliers, no_finish_multipliers, wd_multipliers):
         """Insert product records for a table"""
         cursor = self.conn.cursor()
         
         for i, model in enumerate(models):
-            tb_mod = tb_modifiers[i] if i < len(tb_modifiers) else None
+            base_mod = base_modifiers[i] if i < len(base_modifiers) else None
             anodized_mult = anodized_multipliers[i] if i < len(anodized_multipliers) else None
             powder_mult = powder_coated_multipliers[i] if i < len(powder_coated_multipliers) else None
             no_finish_mult = no_finish_multipliers[i] if i < len(no_finish_multipliers) else None
             wd_mult = wd_multipliers[i] if i < len(wd_multipliers) else None
             
             cursor.execute('''
-                INSERT OR IGNORE INTO products (table_id, model, sheet_name, tb_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_multiplier)
+                INSERT OR IGNORE INTO products (table_id, model, sheet_name, base_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_multiplier)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (table_id, model, sheet_name, tb_mod, anodized_mult, powder_mult, no_finish_mult, wd_mult))
+            ''', (table_id, model, sheet_name, base_mod, anodized_mult, powder_mult, no_finish_mult, wd_mult))
             self.stats['total_products'] += 1
     
     def extract_tables_from_sheet(self, sheet, sheet_name):
@@ -339,7 +339,7 @@ class ExcelToSQLiteConverter:
                 # Insert products
                 self.insert_products(
                     entry['table_id'], sheet_name, entry['models'],
-                    entry['tb_modifiers'], entry['anodized_multipliers'], entry['powder_coated_multipliers'], entry.get('no_finish_multipliers', []), entry['wd_multipliers']
+                    entry['base_modifiers'], entry['anodized_multipliers'], entry['powder_coated_multipliers'], entry.get('no_finish_multipliers', []), entry['wd_multipliers']
                 )
                 
                 # Process the table
