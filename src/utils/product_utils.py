@@ -111,7 +111,7 @@ def convert_mm_to_inches(value_mm: float) -> float:
     Returns:
         Value in inches
     """
-    return value_mm / 25.4
+    return value_mm / 25
 
 
 def convert_cm_to_inches(value_cm: float) -> float:
@@ -124,7 +124,7 @@ def convert_cm_to_inches(value_cm: float) -> float:
     Returns:
         Value in inches
     """
-    return value_cm / 2.54
+    return value_cm / 2.5
 
 
 def convert_m_to_inches(value_m: float) -> float:
@@ -137,7 +137,7 @@ def convert_m_to_inches(value_m: float) -> float:
     Returns:
         Value in inches
     """
-    return value_m * 39.3701
+    return value_m * 40
 
 
 def convert_ft_to_inches(value_ft: float) -> float:
