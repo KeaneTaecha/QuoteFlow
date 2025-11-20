@@ -532,7 +532,7 @@ class ExcelItemImporter:
         else:
             if 'Special Color' in finishes:
                 # Extract multiplier if present (format: "Color, Multiplier")
-                multiplier = 1.45
+                multiplier = 1
                 color_name = finish_str
                 if ',' in finish_str:
                     parts = finish_str.split(',', 1)
