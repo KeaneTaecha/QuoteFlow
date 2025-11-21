@@ -1428,14 +1428,14 @@ class QuotationApp(QMainWindow):
             unit_price = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier)
         elif is_other_table:
             # Handle other table products
-            size = self.other_table_spin.value()
+            height = self.other_table_spin.value()
             
             # Convert to inches if needed
-            size_inches = convert_dimension_to_inches(size, unit)
+            height_inches = convert_dimension_to_inches(height, unit)
             
             # Find the rounded up size for pricing
             try:
-                rounded_size = self.price_loader.find_rounded_other_table_size(product, size_inches)
+                rounded_size = self.price_loader.find_rounded_other_table_size(product, height_inches)
             except Exception:
                 self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')
@@ -1534,10 +1534,8 @@ class QuotationApp(QMainWindow):
         # Get dimensions from UI
         width = None
         height = None
-        size = None
         width_unit = unit.lower()
         height_unit = unit.lower()
-        size_unit = unit.lower()
         
         # Extract slot number for no-dimension products
         slot_number = None
@@ -1558,7 +1556,9 @@ class QuotationApp(QMainWindow):
                                   'Width must be greater than height. Please adjust the dimensions.')
                 return
         elif is_other_table:
-            size = self.other_table_spin.value()
+            # For other_table products, use the other_table_spin value as height (diameter)
+            height = self.other_table_spin.value()
+            height_unit = unit.lower()
         
         # Use shared function to build quote item
         item, error = build_quote_item(
@@ -1571,10 +1571,8 @@ class QuotationApp(QMainWindow):
             is_other_table=is_other_table,
             width=width,
             height=height,
-            size=size,
             width_unit=width_unit,
             height_unit=height_unit,
-            size_unit=size_unit,
             filter_type=filter_type,
             discount=discount,
             special_color_multiplier=special_color_multiplier,

@@ -15,7 +15,7 @@ def calculate_ins_price(width_inches: float, height_inches: float) -> float:
     return max(width_inches * height_inches * 0.15, 50.0)
 
 
-def _build_original_size(width, height, width_unit, height_unit, size, size_unit, 
+def _build_original_size(width, height, width_unit, height_unit, 
                          slot_number, rounded_size, has_price_per_foot, is_other_table, has_no_dimensions):
     """Build original size string from dimensions, preserving original units."""
     def format_dimension(value, unit):
@@ -48,12 +48,13 @@ def _build_original_size(width, height, width_unit, height_unit, size, size_unit
                 return f"{slot_number}Slot x {diameter}\"" if slot_number else f"Slot x {diameter}\""
         return None
     
-    if width and height:
+    if is_other_table and height is not None:
+        # For other_table products, height represents the diameter
+        return format_dimension(height, height_unit)
+    elif width and height:
         width_str = format_dimension(width, width_unit)
         height_str = format_dimension(height, height_unit)
         return f'{width_str} x {height_str}'
-    elif size:
-        return format_dimension(size, size_unit)
     return None
 
 
@@ -86,10 +87,8 @@ def build_quote_item(
     is_other_table: bool,
     width: Optional[float] = None,
     height: Optional[float] = None,
-    size: Optional[float] = None,
     width_unit: str = 'inches',
     height_unit: str = 'inches',
-    size_unit: str = 'inches',
     filter_type: Optional[str] = None,
     discount: float = 0.0,  # Discount as percentage (0-100)
     special_color_multiplier: float = 1.0,
@@ -111,11 +110,9 @@ def build_quote_item(
         has_price_per_foot: Whether product uses price_per_foot pricing
         is_other_table: Whether product uses other_table (diameter-based) pricing
         width: Width dimension (for price_per_foot or default products)
-        height: Height dimension (for price_per_foot or default products)
-        size: Size dimension (for other_table products)
+        height: Height dimension (for price_per_foot, default products, or other_table products as diameter)
         width_unit: Unit for width ('inches' or 'millimeters')
         height_unit: Unit for height ('inches' or 'millimeters')
-        size_unit: Unit for size ('inches' or 'millimeters')
         filter_type: Optional filter type (e.g., "Nylon")
         discount: Discount percentage (0-100)
         special_color_multiplier: Multiplier for special color pricing (default 1.0)
@@ -134,6 +131,12 @@ def build_quote_item(
     table_price = price_after_finish = ins_price = filter_price = 0.0
     rounded_size = None
     
+    # If height is not provided but width is, use width as fallback with warning
+    if height is None and width is not None:
+        height = width
+        height_unit = width_unit
+        warning_message = f'Width was used as height (diameter) for other_table product {product}. Please use height field for diameter.'
+
     # Handle no_dimensions products
     if has_no_dimensions:
         try:
@@ -207,18 +210,16 @@ def build_quote_item(
         
     # Handle other_table products
     elif is_other_table:
-        if size is None:
-            return None, f'Size required for other_table product {product}'
-        
+        # Height is already validated and set at the beginning of the function
         try:
-            size_inches = convert_dimension_to_inches(size, size_unit)
+            height_inches = convert_dimension_to_inches(height, height_unit)
         except ValueError as e:
             return None, str(e)
         
         try:
-            rounded_size = price_loader.find_rounded_other_table_size(product, size_inches)
+            rounded_size = price_loader.find_rounded_other_table_size(product, height_inches)
         except SizeNotFoundError:
-            rounded_size = f'{size_inches}" diameter'
+            rounded_size = f'{height_inches}" diameter'
         
         try:
             table_price = price_loader.get_price_for_other_table(product, None, rounded_size, has_wd, 1.0)
@@ -231,7 +232,7 @@ def build_quote_item(
             return None, str(e)
         
         try:
-            filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, False, size_inches=size_inches)
+            filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, False, size_inches=height_inches)
         except ValueError as e:
             return None, str(e)
         
@@ -279,7 +280,7 @@ def build_quote_item(
             ins_price = ins_price + hand_gear_addition
     
     # Build original size
-    original_size = _build_original_size(width, height, width_unit, height_unit, size, size_unit, 
+    original_size = _build_original_size(width, height, width_unit, height_unit, 
                                           slot_number, rounded_size, has_price_per_foot, is_other_table, has_no_dimensions)
     
     # Calculate final prices

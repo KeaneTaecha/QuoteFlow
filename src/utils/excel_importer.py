@@ -436,13 +436,6 @@ class ExcelItemImporter:
         if finish is None:
             return {'success': False, 'error': f'Finish "{finish_from_excel}" not available for product "{product}". Available finishes: {", ".join(finishes)}'}
         
-        # Determine size for other_table products
-        size = None
-        size_unit = 'inches'
-        if is_other_table and not has_no_dimensions:
-            size = width if width is not None else (height if height is not None else False)
-            size_unit = width_unit if width is not None else (height_unit if height is not None else 'inches')
-        
         # Extract slot number for no-dimension products
         slot_number = None
         if has_no_dimensions:
@@ -459,10 +452,8 @@ class ExcelItemImporter:
             is_other_table=is_other_table,
             width=width,
             height=height,
-            size=size,
             width_unit=width_unit,
             height_unit=height_unit,
-            size_unit=size_unit,
             filter_type=filter_type,
             discount=discount,
             special_color_multiplier=special_color_multiplier,
