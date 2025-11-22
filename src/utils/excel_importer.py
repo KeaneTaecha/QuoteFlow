@@ -430,7 +430,7 @@ class ExcelItemImporter:
         finish_was_empty = finish_from_excel is None or (isinstance(finish_from_excel, str) and not finish_from_excel.strip())
         if finish is None and finish_was_empty and 'No Finish' in finishes:
             finish = 'No Finish'
-            special_color_multiplier = 1.0
+            special_color_multiplier = None
         
         # If finish was provided but doesn't match, return error
         if finish is None:
@@ -493,14 +493,14 @@ class ExcelItemImporter:
         
         if any(keyword in finish_lower for keyword in no_finish_keywords):
             if 'No Finish' in finishes:
-                return (f"No Finish - {finish_str}", 1.0)
+                return (f"No Finish - {finish_str}", None)
             else:
                 return (None, 1.0)
      
         # Check for Powder Coated
         elif any(keyword in finish_lower for keyword in powder_keywords):
             if 'Powder Coated' in finishes:
-                return (f"Powder Coated - {finish_str}", 1.0)
+                return (f"Powder Coated - {finish_str}", None)
             else:
                 # Powder Coated keywords matched but finish not available
                 return (None, 1.0)
@@ -508,7 +508,7 @@ class ExcelItemImporter:
         # Check for Anodized Aluminum
         elif any(keyword in finish_lower for keyword in anodized_keywords):
             if 'Anodized Aluminum' in finishes:
-                return (f"Anodized Aluminum - {finish_str}", 1.0)
+                return (f"Anodized Aluminum - {finish_str}", None)
             else:
                 # Anodized Aluminum keywords matched but finish not available
                 return (None, 1.0)
@@ -517,7 +517,7 @@ class ExcelItemImporter:
         else:
             if 'Special Color' in finishes:
                 # Extract multiplier if present (format: "Color, Multiplier")
-                multiplier = 1
+                multiplier = None
                 color_name = finish_str
                 if ',' in finish_str:
                     parts = finish_str.split(',', 1)

@@ -98,7 +98,7 @@ def build_quote_item(
     height_unit: str = 'inches',
     filter_type: Optional[str] = None,
     discount: float = 0.0,  # Discount as percentage (0-100)
-    special_color_multiplier: float = 1.0,
+    special_color_multiplier: Optional[float] = None,
     product_code: Optional[str] = None,
     detail: str = '',
     has_ins: bool = False,
@@ -122,7 +122,7 @@ def build_quote_item(
         height_unit: Unit for height ('inches' or 'millimeters')
         filter_type: Optional filter type (e.g., "Nylon")
         discount: Discount percentage (0-100)
-        special_color_multiplier: Multiplier for special color pricing (default 1.0)
+        special_color_multiplier: Multiplier for special color pricing (default None, uses 1.45 if not provided)
         product_code: Optional pre-built product code (if None, will be built)
         detail: Detail text for the item
         has_ins: Whether product has INS option (adds price based on square inches)

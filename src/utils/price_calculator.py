@@ -175,7 +175,7 @@ class PriceCalculator:
     
     def _calculate_final_price_from_base_prices(self, tb_price, wd_price, base_modifier, anodized_multiplier, 
                                                  powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper=False, 
-                                                 special_color_multiplier=1.0):
+                                                 special_color_multiplier=None):
         """
         Calculate final price from base TB and WD prices using modifiers and finish multipliers.
         This is a shared helper function used by get_price_for_other_table, get_price_for_default_table,
@@ -232,8 +232,12 @@ class PriceCalculator:
             # Powder Coated uses the same multiplier regardless of color
             finish_multiplier = powder_coated_multiplier
         elif finish and 'Special Color' in finish:
+            print(f"Special color multiplier: {special_color_multiplier}")
             # Use the user-provided multiplier for special colors
-            finish_multiplier = special_color_multiplier
+            if special_color_multiplier is None:
+                finish_multiplier = 1.45
+            else:
+                finish_multiplier = special_color_multiplier
         
         # Calculate final price
         variables = {
@@ -290,7 +294,7 @@ class PriceCalculator:
             raise ProductNotFoundError(f'Price ID not found for product {product}')
         return price_id
     
-    def get_price_for_price_per_foot(self, product, finish, width, height, with_damper=False, special_color_multiplier=1.0, price_id=None):
+    def get_price_for_price_per_foot(self, product, finish, width, height, with_damper=False, special_color_multiplier=None, price_id=None):
         """Get price for a product with price_per_foot pricing
         
         Formula: (height / 12) × price_per_foot (matching width first)
@@ -352,7 +356,7 @@ class PriceCalculator:
             raise SizeNotFoundError(f'Height {width}" not available in price list for {product}. Please check available heights in the database.')
         return rounded_width
     
-    def get_price_for_default_table(self, product, finish, size, with_damper=False, special_color_multiplier=1.0):
+    def get_price_for_default_table(self, product, finish, size, with_damper=False, special_color_multiplier=None):
         """Get price for a specific product configuration using idx_price_lookup index
         
         Raises:
@@ -416,7 +420,7 @@ class PriceCalculator:
         """
         return self.db.find_rounded_default_table_size(product, width, height)
     
-    def get_price_for_other_table(self, product, finish, diameter, with_damper=False, special_color_multiplier=1.0):
+    def get_price_for_other_table(self, product, finish, diameter, with_damper=False, special_color_multiplier=None):
         """Get price for an other table (diameter-based) product configuration
         
         Raises:

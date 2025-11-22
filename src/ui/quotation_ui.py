@@ -1361,7 +1361,7 @@ class QuotationApp(QMainWindow):
         unit = self.unit_combo.currentText()
         
         # Get special color multiplier if Special Color is selected
-        special_color_multiplier = 1.0  # Default multiplier
+        special_color_multiplier = None  # Default multiplier
         if self.finish_combo.currentText() == 'Special Color':
             special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
         
@@ -1524,7 +1524,7 @@ class QuotationApp(QMainWindow):
         unit = self.unit_combo.currentText()
         
         # Get special color multiplier if Special Color is selected
-        special_color_multiplier = 1.0  # Default multiplier
+        special_color_multiplier = None  # Default multiplier
         if self.finish_combo.currentText() == 'Special Color':
             special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
         
