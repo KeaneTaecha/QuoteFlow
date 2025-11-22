@@ -58,20 +58,27 @@ def _build_original_size(width, height, width_unit, height_unit,
     return None
 
 
-def _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches=None, height_inches=None, size_inches=None):
-    """Calculate filter and INS prices.
+def _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches=None, height_inches=None):
+    """Calculate filter and INS prices for default table products only.
+    
+    Args:
+        price_loader: PriceCalculator instance
+        filter_type: Optional filter type (e.g., "Nylon")
+        has_ins: Whether product has INS option
+        width_inches: Width in inches (required for filter calculation)
+        height_inches: Height in inches (required for filter calculation)
     
     Raises:
-        ValueError: If filter not found in database
+        ValueError: If filter not found in database or dimensions are missing
     """
     filter_price = 0.0
     if filter_type:
-        if size_inches is not None:
-            filter_price = get_filter_price(price_loader, filter_type, size_inches)
-        elif width_inches is not None and height_inches is not None:
+        if width_inches is not None and height_inches is not None:
             filter_price = get_filter_price(price_loader, filter_type, max(width_inches, height_inches), width_inches, height_inches)
-        if filter_price is None:
-            raise ValueError(f'Filter "{filter_type}" not found in database')
+            if filter_price is None:
+                raise ValueError(f'Filter "{filter_type}" not found in database')
+        else:
+            raise ValueError('Width and height are required for filter calculation')
     
     ins_price = calculate_ins_price(width_inches, height_inches) if has_ins and width_inches and height_inches else 0.0
     return filter_price, ins_price
@@ -161,10 +168,9 @@ def build_quote_item(
             except (ProductNotFoundError, PriceNotFoundError) as e:
                 return None, str(e)
             
-            try:
-                filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches=None, height_inches=height_inches)
-            except ValueError as e:
-                return None, str(e)
+            # INS and filter calculations only apply to default table products
+            # Skip for has_no_dimensions products
+            filter_price, ins_price = 0.0, 0.0
             
             unit_price = price_after_finish + filter_price + ins_price
             table_price = price_after_finish
@@ -201,10 +207,9 @@ def build_quote_item(
         except (ProductNotFoundError, PriceNotFoundError) as e:
             return None, str(e)
         
-        try:
-            filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches, height_inches)
-        except ValueError as e:
-            return None, str(e)
+        # INS and filter calculations only apply to default table products
+        # Skip for has_price_per_foot products
+        filter_price, ins_price = 0.0, 0.0
         
         rounded_size = f'{width_inches}" x {rounded_height}"'
         
@@ -231,10 +236,9 @@ def build_quote_item(
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
-        try:
-            filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, False, size_inches=height_inches)
-        except ValueError as e:
-            return None, str(e)
+        # INS and filter calculations only apply to default table products
+        # Skip for is_other_table products
+        filter_price, ins_price = 0.0, 0.0
         
         unit_price = price_after_finish + filter_price
         

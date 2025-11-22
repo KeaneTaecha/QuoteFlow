@@ -7,17 +7,17 @@ from typing import Optional
 from utils.price_calculator import PriceCalculator
 
 
-def get_filter_price(price_loader: PriceCalculator, filter_type: str, size_inches: float, 
-                     width_inches: Optional[float] = None, height_inches: Optional[float] = None) -> Optional[float]:
+def get_filter_price(price_loader: PriceCalculator, filter_type: str, max_dimension: float,
+                     width_inches: float, height_inches: float) -> Optional[float]:
     """
-    Find filter product in database and get its price.
+    Find filter product in database and get its price for default table products only.
     
     Args:
         price_loader: PriceCalculator instance for database access
         filter_type: The filter type (e.g., "Nylon")
-        size_inches: The size in inches (for diameter-based filters) or max dimension
-        width_inches: Optional width in inches for dimension-based filters
-        height_inches: Optional height in inches for dimension-based filters
+        max_dimension: The maximum dimension (max of width and height) in inches
+        width_inches: Width in inches for dimension-based filters
+        height_inches: Height in inches for dimension-based filters
         
     Returns:
         Filter price or None if not found
@@ -47,62 +47,12 @@ def get_filter_price(price_loader: PriceCalculator, filter_type: str, size_inche
     if not finishes:
         return None
     
-    # Use first available finish
-    finish = finishes[0]
-    
-    # Check if filter is diameter-based (other table) or dimension-based
-    is_other_table = price_loader.is_other_table(matching_filter)
-    
-    if is_other_table:
-        # For diameter-based filters, get base price directly from database
-        price = get_base_price_for_other_table(price_loader, matching_filter, size_inches)
-        return price if price and price > 0 else None
-    else:
-        # For dimension-based filters, use actual width and height if provided
-        if width_inches is not None and height_inches is not None:
-            # Ensure width >= height (database convention)
-            filter_width = max(width_inches, height_inches)
-            filter_height = min(width_inches, height_inches)
-            price = get_base_price_for_default_table(price_loader, matching_filter, filter_width, filter_height)
-        else:
-            # Fallback: use size_inches for both dimensions (square filter)
-            price = get_base_price_for_default_table(price_loader, matching_filter, size_inches, size_inches)
-        return price if price and price > 0 else None
-
-
-def get_base_price_for_other_table(price_loader: PriceCalculator, product: str, diameter_inches: float) -> Optional[float]:
-    """
-    Get base price for other table product directly from database.
-    
-    Args:
-        price_loader: PriceCalculator instance for database access
-        product: Product model name
-        diameter_inches: Diameter in inches
-        
-    Returns:
-        Base price or None if not found
-    """
-    db = price_loader.db
-    table_id = db.get_table_id(product)
-    if table_id is None:
-        return None
-    
-    diameter_int = int(diameter_inches)
-    price_result = db.get_price_for_diameter(table_id, diameter_int)
-    
-    # If exact match not found, try to find closest
-    if not price_result:
-        # Find closest diameter >= given diameter
-        closest_size = db.find_rounded_other_table_size(product, diameter_int)
-        if closest_size:
-            # Extract diameter from size string (e.g., "8\" diameter" -> 8)
-            import re
-            match = re.search(r'(\d+)', closest_size)
-            if match:
-                closest_diameter = int(match.group(1))
-                price_result = db.get_price_for_diameter(table_id, closest_diameter)
-    
-    return price_result[0] if price_result else None
+    # Filters only apply to default table products (with width and height)
+    # Ensure width >= height (database convention)
+    filter_width = max(width_inches, height_inches)
+    filter_height = min(width_inches, height_inches)
+    price = get_base_price_for_default_table(price_loader, matching_filter, filter_width, filter_height)
+    return price if price and price > 0 else None
 
 
 def get_base_price_for_default_table(price_loader: PriceCalculator, product: str, 
