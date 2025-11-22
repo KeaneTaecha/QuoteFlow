@@ -118,25 +118,14 @@ class PriceCalculator:
         wd_price = variables.get('WD', 0)
         return self._apply_modifier(wd_modifier, wd_price, variables, wd_price)
 
-    def _apply_pricing_logic(self, finish_multiplier, damper_multiplier, variables, with_damper=False):
-        """Apply pricing logic: equations, multipliers, or fallback to base prices"""
+    def _apply_finish_pricing(self, finish_multiplier, variables, with_damper=False):
+        """Apply finish multiplier to base price (BP or MWD) and return final price"""
         
         # Determine the base price to use
         if with_damper:
             base_price = variables['MWD']  # Use modified WD price for with-damper
         else:
             base_price = variables['BP']   # Use base price for without-damper
-        
-        # If there's a damper multiplier, apply it first
-        if with_damper and damper_multiplier is not None:
-            if self._is_equation(damper_multiplier):
-                try:
-                    base_price = self.equation_parser.parse_equation(str(damper_multiplier), variables)
-                except Exception as e:
-                    print(f"⚠ Warning: Error evaluating damper equation '{damper_multiplier}': {e}")
-                    # Keep original base_price if equation fails
-            elif self._is_number(damper_multiplier):
-                base_price = base_price * float(damper_multiplier)
         
         # Apply finish multiplier if available
         if finish_multiplier is not None:
@@ -228,7 +217,6 @@ class PriceCalculator:
         
         # Determine which multiplier/equation to use based on finish and damper option
         finish_multiplier = None
-        wd_modifier_value = None
         
         # Get finish multiplier
         # Handle None finish (no finish applied, multiplier stays 1.0)
@@ -247,10 +235,6 @@ class PriceCalculator:
             # Use the user-provided multiplier for special colors
             finish_multiplier = special_color_multiplier
         
-        # Get WD modifier
-        if wd_modifier is not None:
-            wd_modifier_value = wd_modifier
-        
         # Calculate final price
         variables = {
             'TB': tb_price,           # TB remains the original table price
@@ -259,8 +243,8 @@ class PriceCalculator:
             'MWD': modified_wd_price, # MWD (Modified WD) is the calculated value from WD multiplier
         }
         
-        # Apply pricing logic with both multipliers
-        final_price = self._apply_pricing_logic(finish_multiplier, wd_modifier_value, variables, with_damper)
+        # Apply finish pricing - MWD already has the WD modifier applied
+        final_price = self._apply_finish_pricing(finish_multiplier, variables, with_damper)
         
         return final_price
 
