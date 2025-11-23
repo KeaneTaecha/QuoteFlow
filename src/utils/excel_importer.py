@@ -485,11 +485,11 @@ class ExcelItemImporter:
         
         finish_lower = finish_str.lower()  
         # Define keywords for Powder Coated finish (used for both substring matching and exact sub-color matching)
-        powder_keywords = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์']
+        powder_keywords = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์', 'สีดำ', 'พ่นดำ']
         anodized_keywords = ['anodized', 'aluminum', 'anodized aluminum', 'anodised', 'aluminium', 'anodised aluminium', 'สีอลูมิเนียม']
         
         # Check for "No Finish" keywords first
-        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished', 'สังกะสี']
+        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished', 'สังกะสี', 'Stainless Steel']
         
         if any(keyword in finish_lower for keyword in no_finish_keywords):
             if 'No Finish' in finishes:
