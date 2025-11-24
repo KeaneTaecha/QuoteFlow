@@ -8,6 +8,7 @@ import re
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 from datetime import datetime
+from utils.product_utils import parse_dimension_with_unit
 
 
 class ExcelQuotationExporter:
@@ -265,44 +266,32 @@ class ExcelQuotationExporter:
                 )
                 
                 def parse_dimension(value_str, field_name):
-                    """Parse dimension value and detect unit. Returns (numeric_value, unit_string)."""
+                    """Parse dimension value and detect unit. Returns (numeric_value, unit_string).
+                    
+                    Returns short unit symbols for display: 'mm', 'cm', 'm', 'ft', '"'
+                    """
                     if not value_str:
                         raise ValueError(f"Empty {field_name} value")
-                    value_str = value_str.strip()
                     
-                    # Detect unit (check in order: longer units first to avoid partial matches)
-                    value_lower = value_str.lower()
-                    has_cm = 'cm' in value_lower and 'mm' not in value_lower  # cm but not part of mm
-                    has_mm = 'mm' in value_lower
-                    has_m = re.search(r'\b(m|meter|metre)\b', value_lower) and 'mm' not in value_lower and 'cm' not in value_lower
-                    has_ft = re.search(r'\b(ft|feet|foot)\b', value_lower) or "'" in value_str
-                    has_quote = '"' in value_str
-                    
-                    # Extract numeric value (remove all unit symbols)
-                    cleaned = value_str.replace('"', '').replace("'", '').replace('mm', '').replace('MM', '').replace('Mm', '').replace('cm', '').replace('CM', '').replace('Cm', '').replace('m', '').replace('M', '').replace('ft', '').replace('FT', '').replace('Ft', '').replace('feet', '').replace('Feet', '').replace('foot', '').replace('Foot', '').replace('meter', '').replace('Meter', '').replace('metre', '').replace('Metre', '').strip()
-                    match = re.search(r'-?\d+\.?\d*', cleaned)
-                    if not match:
+                    numeric_value, unit = parse_dimension_with_unit(value_str)
+                    if numeric_value is None:
                         raise ValueError(f"Could not extract numeric value from {field_name} '{value_str}'")
                     
-                    try:
-                        numeric_value = float(match.group())
-                    except ValueError as e:
-                        raise ValueError(f"Could not convert {field_name} '{value_str}' to float: {e}")
-                    
-                    # Determine unit (check in order of specificity)
-                    if has_cm:
-                        return numeric_value, 'cm'
-                    elif has_mm:
-                        return numeric_value, 'mm'
-                    elif has_m:
-                        return numeric_value, 'm'
-                    elif has_ft:
-                        return numeric_value, 'ft'
-                    elif has_quote:
-                        return numeric_value, '"'
+                    # Convert full unit names to short symbols for display
+                    unit_map = {
+                        'millimeters': 'mm',
+                        'centimeters': 'cm',
+                        'meters': 'm',
+                        'feet': 'ft',
+                        'inches': '"'
+                    }
+                    # If no unit detected, default based on value size
+                    if unit is None:
+                        unit_symbol = 'mm' if numeric_value > 100 else '"'
                     else:
-                        # No explicit unit - default to mm if value > 100, otherwise inches
-                        return numeric_value, 'mm' if numeric_value > 100 else '"'
+                        unit_symbol = unit_map.get(unit, '"')
+                    
+                    return (numeric_value, unit_symbol)
                 
                 # Handle other_table products (diameter-based) differently
                 if is_other_table:

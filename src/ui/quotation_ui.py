@@ -1348,6 +1348,9 @@ class QuotationApp(QMainWindow):
         if finish == 'Powder Coated':
             powder_color = self.powder_color_combo.currentText()
             finish = f"Powder Coated - {powder_color}"
+        elif finish == 'Anodized Aluminum':
+            # Add finish_str to Anodized Aluminum (default to สีอลูมิเนียม)
+            finish = f"Anodized Aluminum - สีอลูมิเนียม"
         elif finish == 'Special Color':
             # Add special color name to finish
             color_name = self.special_color_input.text().strip()
@@ -1506,11 +1509,14 @@ class QuotationApp(QMainWindow):
         # Extract product name, WD flag, INS flag, and filter type from input
         product, with_damper, has_ins, filter_type = extract_product_flags_and_filter(product_input)
         finish = self.finish_combo.currentText()
-        
+
         # Add powder coating color to finish if Powder Coated is selected
         if finish == 'Powder Coated':
             powder_color = self.powder_color_combo.currentText()
             finish = f"Powder Coated - {powder_color}"
+        elif finish == 'Anodized Aluminum':
+            # Add finish_str to Anodized Aluminum (default to สีอลูมิเนียม)
+            finish = f"Anodized Aluminum - สีอลูมิเนียม"
         elif finish == 'Special Color':
             # Add special color name to finish
             color_name = self.special_color_input.text().strip()

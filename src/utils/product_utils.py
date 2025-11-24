@@ -271,6 +271,86 @@ def get_product_type_flags(price_loader: PriceCalculator, product: str) -> Tuple
     return has_no_dimensions, has_price_per_foot, is_other_table
 
 
+def parse_dimension_with_unit(value_str: str) -> Tuple[Optional[float], Optional[str]]:
+    """
+    Parse a dimension string and detect its unit.
+    
+    Detects units from the string itself. Returns full unit names:
+    - 'millimeters' for mm
+    - 'centimeters' for cm
+    - 'meters' for m
+    - 'feet' for ft
+    - 'inches' for " or in
+    
+    Args:
+        value_str: Dimension string (e.g., "1.0m", "550mm", "3\"")
+        
+    Returns:
+        Tuple of (numeric_value, unit_name) or (None, None) if parsing fails.
+        If no unit is detected, returns (numeric_value, None).
+        
+    Examples:
+        - "1.0m" → (1.0, 'meters')
+        - "550mm" → (550.0, 'millimeters')
+        - "3\"" → (3.0, 'inches')
+        - "2ft" → (2.0, 'feet')
+        - "50cm" → (50.0, 'centimeters')
+        - "550" → (550.0, None)
+    """
+    if not value_str:
+        return None, None
+    
+    value_str = str(value_str).strip()
+    value_lower = value_str.lower()
+    
+    # Extract numeric value first
+    match = re.search(r'(\d+(?:\.\d+)?)', value_str)
+    if not match:
+        return None, None
+    num_value = float(match.group(1))
+    
+    # Check for units in order of specificity (longer units first to avoid partial matches)
+    # Check for quote (") - inches
+    if '"' in value_str:
+        return num_value, 'inches'
+    
+    # Check for single quote (') - feet
+    if "'" in value_str:
+        return num_value, 'feet'
+    
+    # Check for cm (but not part of mm) - check before mm
+    if 'cm' in value_lower and 'mm' not in value_lower:
+        return num_value, 'centimeters'
+    
+    # Check for mm
+    if 'mm' in value_lower:
+        return num_value, 'millimeters'
+    
+    # Check for meters - must check that 'm' is not part of 'mm' or 'cm'
+    # Check if 'm' appears (as standalone or in 'meter'/'metre') and not part of mm/cm
+    if 'mm' not in value_lower and 'cm' not in value_lower:
+        if 'meter' in value_lower or 'metre' in value_lower:
+            return num_value, 'meters'
+        elif 'm' in value_lower:
+            return num_value, 'meters'
+    
+    # Check for feet - check for 'ft', 'feet', or 'foot'
+    if 'ft' in value_lower or 'feet' in value_lower or 'foot' in value_lower:
+        return num_value, 'feet'
+    
+    # Check for inches - check for 'in' or 'inch' (but not part of other units)
+    if ('in' in value_lower or 'inch' in value_lower) and 'mm' not in value_lower and 'cm' not in value_lower:
+        return num_value, 'inches'
+    
+    # No unit detected - try to extract number anyway
+    match = re.search(r'(\d+(?:\.\d+)?)', value_str)
+    if match:
+        num_value = float(match.group(1))
+        return num_value, None
+    
+    return None, None
+
+
 def validate_product_exists(base_product: str, available_models: List[str], 
                             price_loader: Optional[PriceCalculator] = None,
                             filter_type: Optional[str] = None,

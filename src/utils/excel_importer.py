@@ -14,6 +14,7 @@ from utils.product_utils import (
     extract_slot_number_from_model, get_product_type_flags
 )
 from utils.quote_utils import build_quote_item
+from utils.product_utils import parse_dimension_with_unit
 
 
 class ExcelItemImporter:
@@ -234,86 +235,6 @@ class ExcelItemImporter:
         except:
             return 0.0
     
-    def _parse_dimension_with_unit(self, value, default_unit):
-        """Parse dimension value, detecting unit from value or using default_unit
-        
-        If value contains a unit symbol (", ', mm, cm, m, ft, etc.), it's treated as that unit
-        regardless of default_unit. Otherwise, uses the default_unit.
-        
-        Examples:
-        - "3\"" with default_unit='millimeters' → (3.0, 'inches')
-        - "550mm" with default_unit='inches' → (550.0, 'millimeters')
-        - "2ft" with default_unit='inches' → (2.0, 'feet')
-        - "1.5m" with default_unit='inches' → (1.5, 'meters')
-        - "50cm" with default_unit='inches' → (50.0, 'centimeters')
-        - "550" with default_unit='millimeters' → (550.0, 'millimeters')
-        - "3" with default_unit='inches' → (3.0, 'inches')
-        """
-        if value is None:
-            return None, None
-        
-        value_str = str(value).strip()
-        value_lower = value_str.lower()
-        
-        # Detect unit in the value string (check in order: longer units first)
-        # Check for quote (") - inches
-        if '"' in value_str:
-            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
-            if match:
-                num_value = float(match.group(1))
-                return num_value, 'inches'
-        
-        # Check for single quote (') - feet
-        if "'" in value_str:
-            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
-            if match:
-                num_value = float(match.group(1))
-                return num_value, 'feet'
-        
-        # Check for cm (but not part of mm)
-        if 'cm' in value_lower and 'mm' not in value_lower:
-            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
-            if match:
-                num_value = float(match.group(1))
-                return num_value, 'centimeters'
-        
-        # Check for mm
-        if 'mm' in value_lower:
-            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
-            if match:
-                num_value = float(match.group(1))
-                return num_value, 'millimeters'
-        
-        # Check for meters (m, meter, metre) - but not part of mm or cm
-        if re.search(r'\b(m|meter|metre)\b', value_lower) and 'mm' not in value_lower and 'cm' not in value_lower:
-            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
-            if match:
-                num_value = float(match.group(1))
-                return num_value, 'meters'
-        
-        # Check for feet (ft, feet, foot)
-        if re.search(r'\b(ft|feet|foot)\b', value_lower):
-            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
-            if match:
-                num_value = float(match.group(1))
-                return num_value, 'feet'
-        
-        # Check for inches (inch, in) - but not part of other units
-        if re.search(r'\b(inch|in)\b', value_lower) and 'mm' not in value_lower and 'cm' not in value_lower:
-            match = re.search(r'(\d+(?:\.\d+)?)', value_str)
-            if match:
-                num_value = float(match.group(1))
-                return num_value, 'inches'
-        
-        # No unit detected in value, use default_unit
-        # Try to extract number
-        match = re.search(r'(\d+(?:\.\d+)?)', value_str)
-        if match:
-            num_value = float(match.group(1))
-            return num_value, default_unit
-        
-        return None, None
-    
     def _create_invalid_item(self, item_data, error_message):
         """Create an invalid item entry for display in the quote"""
         model = item_data.get('model', 'Unknown').strip()
@@ -404,8 +325,14 @@ class ExcelItemImporter:
         has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
         
         # Parse width and height with unit handling
-        width, width_unit = self._parse_dimension_with_unit(width_value, default_unit)
-        height, height_unit = self._parse_dimension_with_unit(height_value, default_unit)
+        width, width_unit = parse_dimension_with_unit(width_value)
+        height, height_unit = parse_dimension_with_unit(height_value)
+        
+        # If no unit detected, use default_unit
+        if width_unit is None:
+            width_unit = default_unit
+        if height_unit is None:
+            height_unit = default_unit
         
         # For price_per_foot products, both width and height are required (unless has_no_dimensions)
         if has_price_per_foot and not has_no_dimensions:
