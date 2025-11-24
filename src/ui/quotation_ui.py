@@ -1387,7 +1387,7 @@ class QuotationApp(QMainWindow):
                 height = self.height_spin.value()
                 unit = self.unit_combo.currentText()
                 height_inches = convert_dimension_to_inches(height, unit)
-                unit_price = self.price_loader.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id)
+                unit_price, _ = self.price_loader.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id)
                 self.rounded_size_label.setText('N/A')
             elif is_other_table:
                 # For other table products with no dimensions, use find_rounded_other_table_size with price_id
@@ -1401,7 +1401,7 @@ class QuotationApp(QMainWindow):
                 
                 self.rounded_size_label.setText(rounded_size)
                 # Get price using the rounded size
-                unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+                unit_price, _ = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
 
         elif has_price_per_foot:
             # Handle price_per_foot products - require width and height
@@ -1425,7 +1425,7 @@ class QuotationApp(QMainWindow):
             self.rounded_size_label.setText(f'{width_inches}" x {rounded_height}"')
             
             # Get price using price_per_foot formula: (width / 12) × price_per_foot
-            unit_price = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier)
+            unit_price, _ = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier)
         elif is_other_table:
             # Handle other table products
             height = self.other_table_spin.value()
@@ -1446,7 +1446,7 @@ class QuotationApp(QMainWindow):
             self.rounded_size_label.setText(rounded_size)
             
             # Get price using the rounded size
-            unit_price = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            unit_price, _ = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
         else:
             # Handle width/height-based products
             width = self.width_spin.value()
@@ -1476,7 +1476,7 @@ class QuotationApp(QMainWindow):
             self.rounded_size_label.setText(rounded_size)
             
             # Get price using the rounded size
-            unit_price = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            unit_price, _ = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
         
         # Apply discount
         if unit_price is None:

@@ -137,6 +137,7 @@ def build_quote_item(
     warning_message = None
     table_price = price_after_finish = ins_price = filter_price = 0.0
     rounded_size = None
+    finish_multiplier = None
     
     # If height is not provided but width is, use width as fallback with warning
     if height is None and width is not None:
@@ -162,7 +163,14 @@ def build_quote_item(
             except ValueError as e:
                 return None, str(e)
             try:
-                price_after_finish = price_loader.get_price_for_price_per_foot(
+                table_price, _ = price_loader.get_price_for_price_per_foot(
+                    product, None, 0, height_inches, has_wd, 1.0, price_id=price_id
+                )
+            except (ProductNotFoundError, PriceNotFoundError) as e:
+                return None, str(e)
+            
+            try:
+                price_after_finish, finish_multiplier = price_loader.get_price_for_price_per_foot(
                     product, finish, 0, height_inches, has_wd, special_color_multiplier, price_id=price_id
                 )
             except (ProductNotFoundError, PriceNotFoundError) as e:
@@ -172,8 +180,6 @@ def build_quote_item(
             # Skip for has_no_dimensions products
             filter_price, ins_price = 0.0, 0.0
             
-            unit_price = price_after_finish + filter_price + ins_price
-            table_price = price_after_finish
         
     # Handle price_per_foot products
     elif has_price_per_foot:
@@ -196,12 +202,12 @@ def build_quote_item(
             return None, str(e)
         
         try:
-            table_price = price_loader.get_price_for_price_per_foot(product, None, rounded_height, width_inches, has_wd, 1.0)
+            table_price, _ = price_loader.get_price_for_price_per_foot(product, None, rounded_height, width_inches, has_wd, 1.0)
         except (ProductNotFoundError, PriceNotFoundError) as e:
             return None, str(e)
         
         try:
-            price_after_finish = price_loader.get_price_for_price_per_foot(
+            price_after_finish, finish_multiplier = price_loader.get_price_for_price_per_foot(
                 product, finish, rounded_height, width_inches, has_wd, special_color_multiplier
             )
         except (ProductNotFoundError, PriceNotFoundError) as e:
@@ -227,12 +233,12 @@ def build_quote_item(
             rounded_size = f'{height_inches}" diameter'
         
         try:
-            table_price = price_loader.get_price_for_other_table(product, None, rounded_size, has_wd, 1.0)
+            table_price, _ = price_loader.get_price_for_other_table(product, None, rounded_size, has_wd, 1.0)
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
         try:
-            price_after_finish = price_loader.get_price_for_other_table(product, finish, rounded_size, has_wd, special_color_multiplier)
+            price_after_finish, finish_multiplier = price_loader.get_price_for_other_table(product, finish, rounded_size, has_wd, special_color_multiplier)
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
@@ -240,10 +246,18 @@ def build_quote_item(
         # Skip for is_other_table products
         filter_price, ins_price = 0.0, 0.0
         
-        unit_price = price_after_finish + filter_price
-        
     # Handle default width/height products
     else:
+        # If only one dimension is provided, apply it to both with warning
+        if width is not None and height is None:
+            height = width
+            height_unit = width_unit
+            warning_message = f'Only width ({width} {width_unit}) was provided for default table. Applied to both height and width.'
+        elif height is not None and width is None:
+            width = height
+            width_unit = height_unit
+            warning_message = f'Only height ({height} {height_unit}) was provided for default table. Applied to both height and width.'
+        
         if width is None or height is None:
             return None, f'Width and height required for {product}'
         
@@ -262,12 +276,12 @@ def build_quote_item(
         rounded_size = price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches) or f'{width_inches}" x {height_inches}"'
         
         try:
-            table_price = price_loader.get_price_for_default_table(product, None, rounded_size, has_wd, 1.0)
+            table_price, _ = price_loader.get_price_for_default_table(product, None, rounded_size, has_wd, 1.0)
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
         try:
-            price_after_finish = price_loader.get_price_for_default_table(product, finish, rounded_size, has_wd, special_color_multiplier)
+            price_after_finish, finish_multiplier = price_loader.get_price_for_default_table(product, finish, rounded_size, has_wd, special_color_multiplier)
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
@@ -279,7 +293,7 @@ def build_quote_item(
         # Add handgear addition to ins_price for VD, VD-G, and VD-M products
         # This allows handgear to be displayed separately in the INS column in Excel
         # Note: Handgear is no longer included in price_after_finish (removed from get_price_for_default_table)
-        if product in ['VD-G', 'VD-M']:
+        if product in ['VD-G', 'VD-M', 'RVD-G', 'RVD-M']:
             hand_gear_addition = price_loader.get_hand_gear_price(product, width_inches, height_inches)
             ins_price = ins_price + hand_gear_addition
     
@@ -288,6 +302,7 @@ def build_quote_item(
                                           slot_number, rounded_size, has_price_per_foot, is_other_table, has_no_dimensions)
     
     # Calculate final prices
+    # Note: finish_multiplier is already obtained from the price calculation above
     unit_price = price_after_finish + filter_price + ins_price
     discount_decimal = discount / 100.0
     discounted_unit_price = unit_price * (1 - discount_decimal)
@@ -317,7 +332,8 @@ def build_quote_item(
         'table_price': table_price,
         'price_after_finish': price_after_finish,
         'ins_price': ins_price,
-        'filter_price': filter_price
+        'filter_price': filter_price,
+        'finish_multiplier': finish_multiplier
     }
     
     if warning_message:

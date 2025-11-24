@@ -459,19 +459,20 @@ class ExcelQuotationExporter:
                 cell_v.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column W: พ่นส๊ (List * finish multiplier = price_after_finish)
-                price_after_finish = item.get('price_after_finish', 0.0)
                 ins_price = item.get('ins_price', 0.0)
                 filter_price = item.get('filter_price', 0.0)
+                finish_multiplier = item.get('finish_multiplier')
                 
-                # Use formula: =V{row} * (price_after_finish/table_price) if table_price > 0
-                # If table_price is 0, use IF formula to avoid division by zero
+                # Use Excel formula with actual finish multiplier and rounding
+                # Formula: =ROUND(V{row} * {multiplier}, 0) which is equivalent to int(value + 0.5)
                 cell_w = self.ws[f'W{current_row}']
-                if table_price > 0:
-                    finish_multiplier = price_after_finish / table_price
-                    cell_w.value = f'=V{current_row}*{finish_multiplier}'
+                if finish_multiplier is not None:
+                    # Numeric multiplier: create Excel formula =ROUND(V{row} * {multiplier}, 0)
+                    cell_w.value = f'=ROUND(V{current_row}*{float(finish_multiplier)},0)'
                 else:
-                    # If table_price is 0, just use price_after_finish directly
-                    cell_w.value = f'=IF(V{current_row}=0,{price_after_finish},V{current_row}*({price_after_finish}/V{current_row}))'
+                    # No multiplier or equation: use column V directly
+                    cell_w.value = f'=V{current_row}'
+                
                 cell_w.font = normal_font
                 cell_w.alignment = right_alignment
                 cell_w.number_format = '0.00'  # Format to 2 decimal places

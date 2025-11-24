@@ -63,9 +63,9 @@ class PriceCalculator:
         Returns:
             Hand gear price amount (0 if product doesn't use hand gear)
         """
-        if product == 'VD-G':
+        if product == 'VD-G' or product == 'RVD-G':
             hand_gear_price = 600
-        elif product == 'VD-M':
+        elif product == 'VD-M' or product == 'RVD-M':
             hand_gear_price = 7000
         else:
             return 0
@@ -232,7 +232,6 @@ class PriceCalculator:
             # Powder Coated uses the same multiplier regardless of color
             finish_multiplier = powder_coated_multiplier
         elif finish and 'Special Color' in finish:
-            print(f"Special color multiplier: {special_color_multiplier}")
             # Use the user-provided multiplier for special colors
             if special_color_multiplier is None:
                 finish_multiplier = 1.45
@@ -250,7 +249,7 @@ class PriceCalculator:
         # Apply finish pricing - MWD already has the WD modifier applied
         final_price = self._apply_finish_pricing(finish_multiplier, variables, with_damper)
         
-        return final_price
+        return final_price, finish_multiplier
 
     
     def _get_exceeded_dimension_multiplier(self, table_id, width, height, with_damper=False):
@@ -309,7 +308,7 @@ class PriceCalculator:
             price_id: Optional price_id to use directly (for has_no_dimensions case)
             
         Returns:
-            Calculated price
+            Tuple of (calculated price, finish_multiplier)
             
         Raises:
             ProductNotFoundError: If product data not found
@@ -335,11 +334,12 @@ class PriceCalculator:
         wd_price = tb_price  # Price per foot products use the same base for both
         
         # Use shared helper function to calculate final price
-        return self._calculate_final_price_from_base_prices(
+        final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
             tb_price, wd_price, base_modifier, anodized_multiplier,
             powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
             special_color_multiplier
         )
+        return final_price, finish_multiplier
     
     def find_rounded_price_per_foot_width(self, product, width):
         """Find the exact match first, then the next available width that is >= the given width for price_per_foot products
@@ -358,6 +358,9 @@ class PriceCalculator:
     
     def get_price_for_default_table(self, product, finish, size, with_damper=False, special_color_multiplier=None):
         """Get price for a specific product configuration using idx_price_lookup index
+        
+        Returns:
+            Tuple of (calculated price, finish_multiplier)
         
         Raises:
             ValueError: If size format is invalid
@@ -378,10 +381,17 @@ class PriceCalculator:
         # Special case for Model VD, VD-G and VD-M: Check for oversized dimensions first
         if product in ['VD', 'VD-G', 'VD-M']:
             # Check for VD oversized dimensions using inch values directly
-            vd_oversized_price = self._calculate_vd_oversized_price(table_id, width, height, with_damper, product)
-            if vd_oversized_price is not None:
-                # Use the VD oversized price directly
-                return int(vd_oversized_price + 0.5)
+            vd_result = self._calculate_vd_oversized_price(table_id, width, height, with_damper, product)
+            if vd_result is not None:
+                # vd_result contains (tb_price, wd_price) after dimension multipliers
+                tb_price, wd_price = vd_result
+                # Apply finish multipliers using the shared helper function
+                final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
+                    tb_price, wd_price, base_modifier, anodized_multiplier,
+                    powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
+                    special_color_multiplier
+                )
+                return final_price, finish_multiplier
         
         # Check if dimensions exceed table limits and get appropriate multipliers
         exceeded_tb_multiplier = self._get_exceeded_dimension_multiplier(table_id, width, height, with_damper=False)
@@ -398,19 +408,17 @@ class PriceCalculator:
             if not price_result:
                 raise PriceNotFoundError(f'Price not found for {product} with size {size}')
             
-            # Get base prices
-            tb_price = price_result[0] if price_result[0] is not None else 0  # Table base price
-            wd_price = price_result[1] if price_result[1] is not None else 0   # With damper price
+            # Get base prices (tb_price, wd_price)
+            tb_price, wd_price = price_result
         
         # Use shared helper function to calculate final price
-        final_price = self._calculate_final_price_from_base_prices(
+        final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
             tb_price, wd_price, base_modifier, anodized_multiplier,
             powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
             special_color_multiplier
         )
         
-        
-        return final_price
+        return final_price, finish_multiplier
     
     def find_rounded_default_table_size(self, product, finish, width, height):
         """Find the exact match first, then the next available size that is >= the given width and height
@@ -422,6 +430,9 @@ class PriceCalculator:
     
     def get_price_for_other_table(self, product, finish, diameter, with_damper=False, special_color_multiplier=None):
         """Get price for an other table (diameter-based) product configuration
+        
+        Returns:
+            Tuple of (calculated price, finish_multiplier)
         
         Raises:
             ValueError: If diameter format is invalid
@@ -443,16 +454,16 @@ class PriceCalculator:
         if not price_result:
             raise PriceNotFoundError(f'Price not found for {product} with diameter {diameter}"')
         
-        # Get base prices
-        tb_price = price_result[0] if price_result[0] is not None else 0  # Table base price
-        wd_price = price_result[1] if price_result[1] is not None else 0   # With damper price
+        # Get base prices (tb_price, wd_price)
+        tb_price, wd_price = price_result
         
         # Use shared helper function to calculate final price
-        return self._calculate_final_price_from_base_prices(
+        final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
             tb_price, wd_price, base_modifier, anodized_multiplier,
             powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
             special_color_multiplier
         )
+        return final_price, finish_multiplier
     
     def find_rounded_other_table_size(self, product, diameter, price_id=None):
         """Find the exact match first, then the next available diameter that is >= the given diameter for other table products
@@ -480,10 +491,11 @@ class PriceCalculator:
     
     def _calculate_vd_oversized_price(self, table_id, width, height, with_damper=False, product=None):
         """
-        Calculate price for VD, VD-G and VD-M products when dimensions exceed limits:
+        Calculate base TB and WD prices for VD, VD-G and VD-M products when dimensions exceed limits:
         - Height > 40 inch or Width > 80 inch
         - Use maximum dimensions (40 inch height, 80 inch width) to calculate round-up multipliers
         - Find price for the divided dimensions and multiply by round-up numbers
+        - Returns base prices (TB and WD) after dimension multipliers, ready for finish multiplier application
         
         Args:
             table_id: Table ID for database lookup
@@ -491,6 +503,9 @@ class PriceCalculator:
             height: Height in inches
             with_damper: Whether product has damper option
             product: Product model name (VD, VD-G or VD-M) - kept for compatibility but not used
+            
+        Returns:
+            Tuple of (tb_price, wd_price) after dimension multipliers, or None if not oversized
         """
         # Check if dimensions exceed VD limits (using inch values directly)
         height_exceeds = height > 40  # 40 inch
@@ -537,32 +552,22 @@ class PriceCalculator:
         if not price_result:
             closest = self.db.find_closest_price_for_dimensions(table_id, lookup_height, lookup_width)
             if closest:
-                lookup_height = closest[0]
-                lookup_width = closest[1]
-                price_result = (closest[2], closest[3])
-        
-        if not price_result or (price_result[0] is None and price_result[1] is None):
-            return None
-        
-        # Get the appropriate price based on with_damper flag
-        if with_damper and price_result[1] is not None:
-            base_price = price_result[1]
-        elif not with_damper and price_result[0] is not None:
-            base_price = price_result[0]
+                lookup_height, lookup_width, tb_price, wd_price = closest
+            else:
+                return None
         else:
-            # Fallback to available price
-            base_price = price_result[0] if price_result[0] is not None else price_result[1]
-        
-        if base_price is None:
-            return None
+            # Get both TB and WD prices from exact match
+            tb_price, wd_price = price_result
         
         # Calculate total multiplier
         total_multiplier = height_multiplier * width_multiplier
         
-        # Calculate final price
-        final_price = base_price * total_multiplier
+        # Apply dimension multipliers to both TB and WD prices
+        # These will be passed to _calculate_final_price_from_base_prices for finish multiplier application
+        tb_price_with_multiplier = tb_price * total_multiplier
+        wd_price_with_multiplier = wd_price * total_multiplier
         
-        return final_price
+        return tb_price_with_multiplier, wd_price_with_multiplier
     
     def __del__(self):
         """Clean up database connection when object is destroyed"""

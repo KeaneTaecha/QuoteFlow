@@ -229,10 +229,10 @@ class PriceDatabase:
     
     # Price queries
     def get_price_for_dimensions(self, table_id: int, height: int, width: int) -> Optional[Tuple[float, float]]:
-        """Get normal_price and price_with_damper for given dimensions
+        """Get tb_price and wd_price for given dimensions
         
         Returns:
-            Tuple of (normal_price, price_with_damper) or None
+            Tuple of (tb_price, wd_price) or None if not found
         """
         conn = self.get_connection()
         if not conn:
@@ -248,13 +248,16 @@ class PriceDatabase:
         result = cursor.fetchone()
         if not result or (result[0] is None and result[1] is None):
             return None
-        return result
+        # Return as (tb_price, wd_price) for consistency
+        tb_price = result[0] if result[0] is not None else 0
+        wd_price = result[1] if result[1] is not None else 0
+        return tb_price, wd_price
     
     def get_price_for_diameter(self, table_id: int, diameter: int) -> Optional[Tuple[float, float]]:
-        """Get normal_price and price_with_damper for given diameter (other table)
+        """Get tb_price and wd_price for given diameter (other table)
         
         Returns:
-            Tuple of (normal_price, price_with_damper) or None
+            Tuple of (tb_price, wd_price) or None if not found
         """
         conn = self.get_connection()
         if not conn:
@@ -270,7 +273,10 @@ class PriceDatabase:
         result = cursor.fetchone()
         if not result or (result[0] is None and result[1] is None):
             return None
-        return result
+        # Return as (tb_price, wd_price) for consistency
+        tb_price = result[0] if result[0] is not None else 0
+        wd_price = result[1] if result[1] is not None else 0
+        return tb_price, wd_price
     
     def get_price_per_foot(self, table_id: int, width: int, price_id: Optional[int] = None) -> Optional[float]:
         """Get price_per_foot for given table_id and width, or by price_id
@@ -559,7 +565,11 @@ class PriceDatabase:
         return (result[0], result[1])
     
     def find_closest_price_for_dimensions(self, table_id: int, height: int, width: int) -> Optional[Tuple[int, int, float, float]]:
-        """Find closest available dimensions and prices (height, width, normal_price, price_with_damper)"""
+        """Find closest available dimensions and prices
+        
+        Returns:
+            Tuple of (height, width, tb_price, wd_price) or None if not found
+        """
         conn = self.get_connection()
         if not conn:
             return None
@@ -573,7 +583,15 @@ class PriceDatabase:
             LIMIT 1
         ''', (table_id, height, width))
         
-        return cursor.fetchone()
+        result = cursor.fetchone()
+        if result:
+            # Return as (height, width, tb_price, wd_price) for consistency
+            height = result[0]
+            width = result[1]
+            tb_price = result[2] if result[2] is not None else 0
+            wd_price = result[3] if result[3] is not None else 0
+            return height, width, tb_price, wd_price
+        return None
     
     def __del__(self):
         """Clean up database connection when object is destroyed"""

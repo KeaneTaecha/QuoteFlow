@@ -489,8 +489,8 @@ class ExcelItemImporter:
         anodized_keywords = ['anodized', 'aluminum', 'anodized aluminum', 'anodised', 'aluminium', 'anodised aluminium', 'สีอลูมิเนียม']
         
         # Check for "No Finish" keywords first
-        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished', 'สังกะสี', 'Stainless Steel']
-        
+        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished', 'สังกะสี', 'stainless steel']
+
         if any(keyword in finish_lower for keyword in no_finish_keywords):
             if 'No Finish' in finishes:
                 return (f"No Finish - {finish_str}", None)
