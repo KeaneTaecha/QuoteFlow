@@ -1472,16 +1472,25 @@ class QuotationApp(QMainWindow):
             try:
                 rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
             except Exception:
-                self.unit_price_label.setText('N/A')
-                self.total_price_label.setText('฿ 0.00')
-                self.rounded_size_label.setText('N/A')
-                return
+                # If we can't find rounded size, use actual dimensions (might be exceeded dimensions)
+                rounded_size = None
+            
+            # If rounded_size is None, construct size string from actual dimensions
+            # This allows exceeded dimension calculation to work
+            if not rounded_size:
+                rounded_size = f'{int(width_inches)}" x {int(height_inches)}"'
             
             # Display the rounded size
             self.rounded_size_label.setText(rounded_size)
             
-            # Get price using the rounded size
-            unit_price, _ = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            # Get price using the rounded size (handles exceeded dimensions internally)
+            try:
+                unit_price, _ = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            except Exception:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
         
         # Apply discount
         if unit_price is None:
@@ -1505,99 +1514,142 @@ class QuotationApp(QMainWindow):
     def add_item_to_quote(self):
         """Add the selected item to the quote"""
         if not self.price_loader:
+            QMessageBox.warning(self, 'Error', 'Price database not loaded. Please wait for the database to load.')
             return
         
-        product_input = self.product_input.text().strip()
-        # Extract product name, WD flag, INS flag, and filter type from input
-        product, with_damper, has_ins, filter_type = extract_product_flags_and_filter(product_input)
-        finish = self.finish_combo.currentText()
-
-        # Add powder coating color to finish if Powder Coated is selected
-        if finish == 'Powder Coated':
-            powder_color = self.powder_color_combo.currentText()
-            finish = f"Powder Coated - {powder_color}"
-        elif finish == 'Anodized Aluminum':
-            # Add finish_str to Anodized Aluminum (default to สีอลูมิเนียม)
-            finish = f"Anodized Aluminum - สีอลูมิเนียม"
-        elif finish == 'Special Color':
-            # Add special color name to finish
-            color_name = self.special_color_input.text().strip()
-            if color_name:
-                finish = f"Special Color - {color_name}"
-            else:
-                QMessageBox.warning(self, 'Missing Color Name', 'Please enter a color name for special color.')
-                return
-        quantity = self.quantity_spin.value()
-        discount = self.discount_spin.value()
-        unit = self.unit_combo.currentText()
-        
-        # Get special color multiplier if Special Color is selected
-        special_color_multiplier = None  # Default multiplier
-        if self.finish_combo.currentText() == 'Special Color':
-            special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
-        
-        # Get product type flags using consolidated helper
-        has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
-        
-        # Get dimensions from UI
-        width = None
-        height = None
-        width_unit = unit.lower()
-        height_unit = unit.lower()
-        
-        # Extract slot number for no-dimension products
-        slot_number = None
-        if has_no_dimensions:
-            slot_number = extract_slot_number_from_model(product_input)
-        
-        if has_no_dimensions:
-            # For no-dimension products, height might still be needed for price_per_foot
-            if has_price_per_foot:
-                height = self.height_spin.value()
-        elif has_price_per_foot or not is_other_table:
-            width = self.width_spin.value()
-            height = self.height_spin.value()
+        try:
+            product_input = self.product_input.text().strip()
             
-            # Validate dimensions: width should be greater than height (for default products)
-            if not has_price_per_foot and height > width:
-                QMessageBox.warning(self, 'Invalid Dimensions', 
-                                  'Width must be greater than height. Please adjust the dimensions.')
+            # Validate that product input is not empty
+            if not product_input:
+                QMessageBox.warning(self, 'Missing Product', 'Please enter a product name.')
                 return
-        elif is_other_table:
-            # For other_table products, use the other_table_spin value as height (diameter)
-            height = self.other_table_spin.value()
+            
+            # Extract product name, WD flag, INS flag, and filter type from input
+            product, with_damper, has_ins, filter_type = extract_product_flags_and_filter(product_input)
+            
+            # Validate that product name is not empty after extraction
+            if not product or not product.strip():
+                QMessageBox.warning(self, 'Invalid Product', 'Please enter a valid product name.')
+                return
+            
+            finish = self.finish_combo.currentText()
+            
+            # Validate that finish is selected
+            if not finish:
+                QMessageBox.warning(self, 'Missing Finish', 'Please select a finish.')
+                return
+
+            # Add powder coating color to finish if Powder Coated is selected
+            if finish == 'Powder Coated':
+                powder_color = self.powder_color_combo.currentText()
+                finish = f"Powder Coated - {powder_color}"
+            elif finish == 'Anodized Aluminum':
+                # Add finish_str to Anodized Aluminum (default to สีอลูมิเนียม)
+                finish = f"Anodized Aluminum - สีอลูมิเนียม"
+            elif finish == 'Special Color':
+                # Add special color name to finish
+                color_name = self.special_color_input.text().strip()
+                if color_name:
+                    finish = f"Special Color - {color_name}"
+                else:
+                    QMessageBox.warning(self, 'Missing Color Name', 'Please enter a color name for special color.')
+                    return
+            quantity = self.quantity_spin.value()
+            discount = self.discount_spin.value()
+            unit = self.unit_combo.currentText()
+            
+            # Get special color multiplier if Special Color is selected
+            special_color_multiplier = None  # Default multiplier
+            if self.finish_combo.currentText() == 'Special Color':
+                special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
+            
+            # Get product type flags using consolidated helper
+            # Wrap in try-except to catch database errors
+            try:
+                has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
+            except Exception as e:
+                QMessageBox.critical(self, 'Error', f'Failed to get product information: {str(e)}\n\nPlease check that the product exists in the database.')
+                return
+            
+            # Get dimensions from UI
+            width = None
+            height = None
+            width_unit = unit.lower()
             height_unit = unit.lower()
-        
-        # Use shared function to build quote item
-        item, error = build_quote_item(
-            price_loader=self.price_loader,
-            product=product,
-            finish=finish,
-            quantity=quantity,
-            has_wd=with_damper,
-            has_price_per_foot=has_price_per_foot,
-            is_other_table=is_other_table,
-            width=width,
-            height=height,
-            width_unit=width_unit,
-            height_unit=height_unit,
-            filter_type=filter_type,
-            discount=discount,
-            special_color_multiplier=special_color_multiplier,
-            detail=self.detail_input.text().strip(),
-            has_ins=has_ins,
-            has_no_dimensions=has_no_dimensions,
-            slot_number=slot_number
-        )
-        
-        if error:
-            QMessageBox.warning(self, 'Warning', error)
-            return
-        
-        self.quote_items.append(item)
-        self.refresh_items_table()
-        
-        self.statusBar().showMessage(f'Added {item["product_code"]} {item["size"]} to quote')
+            
+            # Extract slot number for no-dimension products
+            slot_number = None
+            if has_no_dimensions:
+                slot_number = extract_slot_number_from_model(product_input)
+            
+            if has_no_dimensions:
+                # For no-dimension products, height might still be needed for price_per_foot
+                if has_price_per_foot:
+                    height = self.height_spin.value()
+            elif has_price_per_foot or not is_other_table:
+                width = self.width_spin.value()
+                height = self.height_spin.value()
+                
+                # Validate dimensions: width should be greater than height (for default products)
+                if not has_price_per_foot and height > width:
+                    QMessageBox.warning(self, 'Invalid Dimensions', 
+                                      'Width must be greater than height. Please adjust the dimensions.')
+                    return
+            elif is_other_table:
+                # For other_table products, use the other_table_spin value as height (diameter)
+                height = self.other_table_spin.value()
+                height_unit = unit.lower()
+            
+            # Use shared function to build quote item
+            # Wrap in try-except to catch any unexpected exceptions
+            try:
+                item, error = build_quote_item(
+                    price_loader=self.price_loader,
+                    product=product,
+                    finish=finish,
+                    quantity=quantity,
+                    has_wd=with_damper,
+                    has_price_per_foot=has_price_per_foot,
+                    is_other_table=is_other_table,
+                    width=width,
+                    height=height,
+                    width_unit=width_unit,
+                    height_unit=height_unit,
+                    filter_type=filter_type,
+                    discount=discount,
+                    special_color_multiplier=special_color_multiplier,
+                    detail=self.detail_input.text().strip(),
+                    has_ins=has_ins,
+                    has_no_dimensions=has_no_dimensions,
+                    slot_number=slot_number
+                )
+            except Exception as e:
+                QMessageBox.critical(self, 'Error', f'Failed to build quote item: {str(e)}\n\nPlease check your input and try again.')
+                return
+            
+            if error:
+                QMessageBox.warning(self, 'Warning', error)
+                return
+            
+            if not item:
+                QMessageBox.warning(self, 'Error', 'Failed to create quote item. Please check your input.')
+                return
+            
+            self.quote_items.append(item)
+            self.refresh_items_table()
+            
+            # Safely access item fields for status message
+            product_code = item.get('product_code', 'Unknown')
+            size = item.get('size', '')
+            self.statusBar().showMessage(f'Added {product_code} {size} to quote')
+            
+        except Exception as e:
+            # Catch any other unexpected errors
+            QMessageBox.critical(self, 'Unexpected Error', 
+                              f'An unexpected error occurred while adding the product:\n\n{str(e)}\n\nPlease try again or contact support if the problem persists.')
+            import traceback
+            print(f"Error in add_item_to_quote: {traceback.format_exc()}")
     
     def add_title_to_quote(self):
         """Add a title item to the quote"""
@@ -1643,7 +1695,7 @@ class QuotationApp(QMainWindow):
             if item.get('is_title', False):
                 # Title row - no ID number, show title in product column
                 self.items_table.setItem(row, 0, QTableWidgetItem(''))  # No ID for titles
-                self.items_table.setItem(row, 1, QTableWidgetItem(item['title']))
+                self.items_table.setItem(row, 1, QTableWidgetItem(item.get('title', '')))
                 self.items_table.setItem(row, 2, QTableWidgetItem(''))  # No detail for titles
                 self.items_table.setItem(row, 3, QTableWidgetItem(''))  # No finish
                 self.items_table.setItem(row, 4, QTableWidgetItem(''))  # No size
@@ -1666,14 +1718,14 @@ class QuotationApp(QMainWindow):
             elif item.get('is_invalid', False):
                 # Invalid item row - show error information
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
-                product_text = item['product_code']
+                product_text = item.get('product_code', 'Unknown')
                 if item.get('error_message'):
                     product_text += f" (ERROR: {item['error_message']})"
                 self.items_table.setItem(row, 1, QTableWidgetItem(product_text))
                 self.items_table.setItem(row, 2, QTableWidgetItem(item.get('detail', '')))
-                self.items_table.setItem(row, 3, QTableWidgetItem(item['finish']))
-                self.items_table.setItem(row, 4, QTableWidgetItem(item['size']))
-                self.items_table.setItem(row, 5, QTableWidgetItem(str(item['quantity'])))
+                self.items_table.setItem(row, 3, QTableWidgetItem(item.get('finish', '')))
+                self.items_table.setItem(row, 4, QTableWidgetItem(item.get('size', '')))
+                self.items_table.setItem(row, 5, QTableWidgetItem(str(item.get('quantity', 0))))
                 self.items_table.setItem(row, 6, QTableWidgetItem('N/A'))
                 self.items_table.setItem(row, 7, QTableWidgetItem('N/A'))
                 self.items_table.setItem(row, 8, QTableWidgetItem('N/A'))
@@ -1692,16 +1744,17 @@ class QuotationApp(QMainWindow):
             elif item.get('warning_message'):
                 # Warning item row - show warning information (similar to errors but with yellow background)
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
-                product_text = item['product_code']
+                product_text = item.get('product_code', 'Unknown')
                 product_text += f" (WARNING: {item.get('warning_message')})"
                 self.items_table.setItem(row, 1, QTableWidgetItem(product_text))
                 self.items_table.setItem(row, 2, QTableWidgetItem(item.get('detail', '')))  # Detail column
                 self.items_table.setItem(row, 3, QTableWidgetItem(item.get('finish') or ''))
-                self.items_table.setItem(row, 4, QTableWidgetItem(item['size']))
-                self.items_table.setItem(row, 5, QTableWidgetItem(str(item['quantity'])))
+                self.items_table.setItem(row, 4, QTableWidgetItem(item.get('size', '')))
+                self.items_table.setItem(row, 5, QTableWidgetItem(str(item.get('quantity', 0))))
                 
                 # Show original unit price
-                self.items_table.setItem(row, 6, QTableWidgetItem(f"฿ {item['unit_price']:,.2f}"))
+                unit_price = item.get('unit_price', 0)
+                self.items_table.setItem(row, 6, QTableWidgetItem(f"฿ {unit_price:,.2f}"))
                 
                 # Show discount percentage
                 discount_percent = item.get('discount', 0) * 100
@@ -1711,7 +1764,8 @@ class QuotationApp(QMainWindow):
                     self.items_table.setItem(row, 7, QTableWidgetItem("0%"))
                 
                 # Show total (after discount)
-                self.items_table.setItem(row, 8, QTableWidgetItem(f"฿ {item['total']:,.2f}"))
+                total = item.get('total', 0)
+                self.items_table.setItem(row, 8, QTableWidgetItem(f"฿ {total:,.2f}"))
                 
                 # Style warning items with yellow background
                 for col in range(9):
@@ -1728,14 +1782,15 @@ class QuotationApp(QMainWindow):
             else:
                 # Regular product row
                 self.items_table.setItem(row, 0, QTableWidgetItem(str(item_counter)))
-                self.items_table.setItem(row, 1, QTableWidgetItem(item['product_code']))
+                self.items_table.setItem(row, 1, QTableWidgetItem(item.get('product_code', 'Unknown')))
                 self.items_table.setItem(row, 2, QTableWidgetItem(item.get('detail', '')))  # Detail column
                 self.items_table.setItem(row, 3, QTableWidgetItem(item.get('finish') or ''))
-                self.items_table.setItem(row, 4, QTableWidgetItem(item['size']))
-                self.items_table.setItem(row, 5, QTableWidgetItem(str(item['quantity'])))
+                self.items_table.setItem(row, 4, QTableWidgetItem(item.get('size', '')))
+                self.items_table.setItem(row, 5, QTableWidgetItem(str(item.get('quantity', 0))))
                 
                 # Show original unit price
-                self.items_table.setItem(row, 6, QTableWidgetItem(f"฿ {item['unit_price']:,.2f}"))
+                unit_price = item.get('unit_price', 0)
+                self.items_table.setItem(row, 6, QTableWidgetItem(f"฿ {unit_price:,.2f}"))
                 
                 # Show discount percentage
                 discount_percent = item.get('discount', 0) * 100
@@ -1745,7 +1800,8 @@ class QuotationApp(QMainWindow):
                     self.items_table.setItem(row, 7, QTableWidgetItem("0%"))
                 
                 # Show total (after discount)
-                self.items_table.setItem(row, 8, QTableWidgetItem(f"฿ {item['total']:,.2f}"))
+                total = item.get('total', 0)
+                self.items_table.setItem(row, 8, QTableWidgetItem(f"฿ {total:,.2f}"))
                 
                 # Apply font size and styling to all cells in this row
                 for col in range(9):

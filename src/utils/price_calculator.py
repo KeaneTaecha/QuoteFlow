@@ -396,8 +396,12 @@ class PriceCalculator:
             ProductNotFoundError: If product data not found
             PriceNotFoundError: If price not found
         """
+        # Validate size input
+        if not size:
+            raise ValueError(f'Size cannot be None or empty')
+        
         # Parse size to get width and height
-        size_match = re.search(r'(\d+(?:\.\d+)?)"?\s*x\s*(\d+(?:\.\d+)?)"?', size.lower())
+        size_match = re.search(r'(\d+(?:\.\d+)?)"?\s*x\s*(\d+(?:\.\d+)?)"?', str(size).lower())
         if not size_match:
             raise ValueError(f'Invalid size format: {size}')
         

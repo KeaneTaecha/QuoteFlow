@@ -89,20 +89,28 @@ class PriceDatabase:
     
     def check_product_condition(self, product: str, condition_sql: str) -> bool:
         """Helper method to check product conditions in database"""
+        # Validate product input
+        if not product or not str(product).strip():
+            return False
+        
         conn = self.get_connection()
         if not conn:
             return False
         
-        cursor = conn.cursor()
-        cursor.execute(f'''
-            SELECT COUNT(*) 
-            FROM products p
-            JOIN prices pr ON p.table_id = pr.table_id
-            WHERE p.model = ? AND {condition_sql}
-        ''', (product,))
-        
-        result = cursor.fetchone()
-        return result[0] > 0 if result else False
+        try:
+            cursor = conn.cursor()
+            cursor.execute(f'''
+                SELECT COUNT(*) 
+                FROM products p
+                JOIN prices pr ON p.table_id = pr.table_id
+                WHERE p.model = ? AND {condition_sql}
+            ''', (product,))
+            
+            result = cursor.fetchone()
+            return result[0] > 0 if result else False
+        except Exception:
+            # Return False on any database error
+            return False
     
     def is_other_table(self, product: str) -> bool:
         """Check if a product uses other table format (diameter-based) instead of width/height"""
