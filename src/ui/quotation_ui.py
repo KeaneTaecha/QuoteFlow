@@ -1390,7 +1390,7 @@ class QuotationApp(QMainWindow):
                 height = self.height_spin.value()
                 unit = self.unit_combo.currentText()
                 height_inches = convert_dimension_to_inches(height, unit)
-                unit_price, _ = self.price_loader.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id)
+                unit_price, _ = self.price_loader.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id, height_unit=unit)
                 self.rounded_size_label.setText('N/A')
             elif is_other_table:
                 # For other table products with no dimensions, use find_rounded_other_table_size with price_id
@@ -1428,7 +1428,9 @@ class QuotationApp(QMainWindow):
             self.rounded_size_label.setText(f'{width_inches}" x {rounded_height}"')
             
             # Get price using price_per_foot formula: (width / 12) × price_per_foot
-            unit_price, _ = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier)
+            # Note: rounded_height is passed as 'width' parameter (to match database), width_inches is passed as 'height' (dimension to multiply)
+            # height_unit should be the unit of the original height dimension (which is width_inches in this case, using 'unit')
+            unit_price, _ = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier, height_unit=unit)
         elif is_other_table:
             # Handle other table products
             height = self.other_table_spin.value()

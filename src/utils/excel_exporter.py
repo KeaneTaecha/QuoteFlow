@@ -524,8 +524,9 @@ class ExcelQuotationExporter:
                 cell_ad.number_format = '0.00'  # Format to 2 decimal places
                 
                 # Column AE: รวมทั้งหมด (Grand Total) = Total + ค่าสี + ค่าขนส่ง
+                # Apply int + 0.5 rounding method using INT function
                 cell_ae = self.ws[f'AE{current_row}']
-                cell_ae.value = f'=AB{current_row}+AC{current_row}+AD{current_row}'
+                cell_ae.value = f'=INT(AB{current_row}+AC{current_row}+AD{current_row}+0.5)'
                 cell_ae.font = normal_font
                 cell_ae.alignment = right_alignment
                 cell_ae.number_format = '0.00'  # Format to 2 decimal places

@@ -293,10 +293,13 @@ class PriceCalculator:
             raise ProductNotFoundError(f'Price ID not found for product {product}')
         return price_id
     
-    def get_price_for_price_per_foot(self, product, finish, width, height, with_damper=False, special_color_multiplier=None, price_id=None):
+    def get_price_for_price_per_foot(self, product, finish, width, height, with_damper=False, special_color_multiplier=None, price_id=None, height_unit='inches'):
         """Get price for a product with price_per_foot pricing
         
-        Formula: (height / 12) × price_per_foot (matching width first)
+        Formula: (height_in_ft) × price_per_foot (matching width first)
+        Height is converted to feet based on height_unit:
+        - If unit is mm, cm, or m: convert back to original unit, then to meters, then to ft using M * 3.281
+        - Otherwise (inches): use height / 12
         
         Args:
             product: Product model name
@@ -306,6 +309,7 @@ class PriceCalculator:
             with_damper: Whether product has damper option
             special_color_multiplier: Multiplier for special color finish
             price_id: Optional price_id to use directly (for has_no_dimensions case)
+            height_unit: Unit of the original height dimension ('mm', 'cm', 'm', 'inches', etc.)
             
         Returns:
             Tuple of (calculated price, finish_multiplier)
@@ -327,10 +331,35 @@ class PriceCalculator:
         if price_per_foot is None:
             raise PriceNotFoundError(f'Price per foot not found for product {product}')
         
-        # Calculate base price: (height / 12) * price_per_foot
+        # Convert height to feet based on unit
+        # height is currently in inches, so we need to convert it back to original unit first
+        unit_lower = str(height_unit).lower().strip()
+        
+        if 'mm' in unit_lower or 'millimeter' in unit_lower:
+            # Convert inches -> mm -> m -> ft
+            # inches to mm: multiply by 25
+            # mm to m: divide by 1000
+            # m to ft: multiply by 3.281
+            height_in_ft = (height * 25 / 1000) * 3.281
+        elif 'cm' in unit_lower or 'centimeter' in unit_lower:
+            # Convert inches -> cm -> m -> ft
+            # inches to cm: multiply by 2.5
+            # cm to m: divide by 100
+            # m to ft: multiply by 3.281
+            height_in_ft = (height * 2.5 / 100) * 3.281
+        elif unit_lower == 'm' or 'meter' in unit_lower:
+            # Convert inches -> m -> ft
+            # inches to m: divide by 40
+            # m to ft: multiply by 3.281
+            height_in_ft = (height / 40) * 3.281
+        else:
+            # Default: inches -> ft (divide by 12)
+            height_in_ft = height / 12
+        
+        # Calculate base price: height_in_ft * price_per_foot
         # Note: 'height' parameter is the dimension to multiply with price_per_foot
         # For price_per_foot, we use the calculated base_price as both TB and WD
-        tb_price = (height / 12) * price_per_foot
+        tb_price = height_in_ft * price_per_foot
         wd_price = tb_price  # Price per foot products use the same base for both
         
         # Use shared helper function to calculate final price

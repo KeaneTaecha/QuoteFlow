@@ -112,18 +112,6 @@ class ExcelItemImporter:
             for row in range(header_row + 1, sheet.max_row + 1):
                 model_value = self._get_cell_value(sheet, row, model_col)
                 
-                # Skip empty rows
-                if model_value is None or str(model_value).strip() == '':
-                    processed_rows += 1
-                    # Update progress every 10 rows or at the end
-                    if progress_callback and total_rows > 0 and (processed_rows % 10 == 0 or processed_rows == total_rows):
-                        progress = 15 + int((processed_rows / total_rows) * 85)  # 15% to 100% internal
-                        progress = min(progress, 100)
-                        progress_callback(progress, f'Reading row {row} of {sheet.max_row}...')
-                    continue
-                
-                model_str = str(model_value).strip()
-                
                 # Get other column values
                 detail_value = self._get_cell_value(sheet, row, detail_col) if detail_col else None
                 width_value = self._get_cell_value(sheet, row, width_col) if width_col else None
@@ -133,15 +121,18 @@ class ExcelItemImporter:
                 finish_value = self._get_cell_value(sheet, row, finish_col) if finish_col else None
                 discount_value = self._get_cell_value(sheet, row, discount_col) if discount_col else None
                 
-                # Check if this is a title (Model has text but other columns are empty)
+                # Check if model is empty (blank row) or if this is a title (Model has text but other columns are empty)
+                model_str = str(model_value).strip() if model_value is not None else ''
+                is_blank_row = model_str == ''
+                
                 has_detail = detail_value is not None and str(detail_value).strip() != ''
                 has_width = width_value is not None and str(width_value).strip() != ''
                 has_height = height_value is not None and str(height_value).strip() != ''
                 has_quantity = quantity_value is not None and str(quantity_value).strip() != ''
                 has_finish = finish_value is not None and str(finish_value).strip() != ''
                 
-                if not has_detail and not has_width and not has_height and not has_quantity and not has_finish:
-                    # This is a title
+                if is_blank_row or (not has_detail and not has_width and not has_height and not has_quantity and not has_finish):
+                    # This is a title (blank row or model has text but other columns are empty)
                     items.append({
                         'is_title': True,
                         'title': model_str,
@@ -412,7 +403,7 @@ class ExcelItemImporter:
         
         finish_lower = finish_str.lower()  
         # Define keywords for Powder Coated finish (used for both substring matching and exact sub-color matching)
-        powder_keywords = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์', 'สีดำ', 'พ่นดำ']
+        powder_keywords = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์', 'สีดำ', 'พ่นดำ', 'สีอบขาว']
         anodized_keywords = ['anodized', 'aluminum', 'anodized aluminum', 'anodised', 'aluminium', 'anodised aluminium', 'สีอลูมิเนียม']
         
         # Check for "No Finish" keywords first

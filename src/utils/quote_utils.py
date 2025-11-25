@@ -164,14 +164,14 @@ def build_quote_item(
                 return None, str(e)
             try:
                 table_price, _ = price_loader.get_price_for_price_per_foot(
-                    product, None, 0, height_inches, has_wd, 1.0, price_id=price_id
+                    product, None, 0, height_inches, has_wd, 1.0, price_id=price_id, height_unit=height_unit
                 )
             except (ProductNotFoundError, PriceNotFoundError) as e:
                 return None, str(e)
             
             try:
                 price_after_finish, finish_multiplier = price_loader.get_price_for_price_per_foot(
-                    product, finish, 0, height_inches, has_wd, special_color_multiplier, price_id=price_id
+                    product, finish, 0, height_inches, has_wd, special_color_multiplier, price_id=price_id, height_unit=height_unit
                 )
             except (ProductNotFoundError, PriceNotFoundError) as e:
                 return None, str(e)
@@ -202,13 +202,15 @@ def build_quote_item(
             return None, str(e)
         
         try:
-            table_price, _ = price_loader.get_price_for_price_per_foot(product, None, rounded_height, width_inches, has_wd, 1.0)
+            # width_inches is passed as 'height' parameter (dimension to multiply), so use width_unit
+            table_price, _ = price_loader.get_price_for_price_per_foot(product, None, rounded_height, width_inches, has_wd, 1.0, height_unit=width_unit)
         except (ProductNotFoundError, PriceNotFoundError) as e:
             return None, str(e)
         
         try:
+            # width_inches is passed as 'height' parameter (dimension to multiply), so use width_unit
             price_after_finish, finish_multiplier = price_loader.get_price_for_price_per_foot(
-                product, finish, rounded_height, width_inches, has_wd, special_color_multiplier
+                product, finish, rounded_height, width_inches, has_wd, special_color_multiplier, height_unit=width_unit
             )
         except (ProductNotFoundError, PriceNotFoundError) as e:
             return None, str(e)
@@ -326,7 +328,7 @@ def build_quote_item(
         'unit_price': unit_price,
         'discount': discount_decimal,
         'discounted_unit_price': discounted_unit_price,
-        'total': discounted_unit_price * quantity,
+        'total': int((discounted_unit_price * quantity) + 0.5),
         'rounded_size': rounded_size,
         'detail': detail,
         'table_price': table_price,
