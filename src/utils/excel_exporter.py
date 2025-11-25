@@ -11,6 +11,32 @@ from datetime import datetime
 from utils.product_utils import parse_dimension_with_unit
 
 
+def parse_dimension(value_str, field_name):
+    """Parse dimension value and detect unit. Returns (numeric_value, unit_symbol)."""
+    if not value_str:
+        raise ValueError(f"Empty {field_name} value")
+
+    numeric_value, unit = parse_dimension_with_unit(value_str)
+    if numeric_value is None:
+        raise ValueError(f"Could not extract numeric value from {field_name} '{value_str}'")
+
+    # Convert full unit names to short symbols for display
+    unit_map = {
+        'millimeters': 'mm',
+        'centimeters': 'cm',
+        'meters': 'm',
+        'feet': 'ft',
+        'inches': '"'
+    }
+    # If no unit detected, default based on value size
+    if unit is None:
+        unit_symbol = 'mm' if numeric_value > 100 else '"'
+    else:
+        unit_symbol = unit_map.get(unit, '"')
+
+    return numeric_value, unit_symbol
+
+
 class ExcelQuotationExporter:
     """Handles exporting quotations to Excel format matching company template"""
     
@@ -264,34 +290,6 @@ class ExcelQuotationExporter:
                     'diameter' in str(rounded_size).lower() or 
                     (size and 'x' not in size and size.strip())
                 )
-                
-                def parse_dimension(value_str, field_name):
-                    """Parse dimension value and detect unit. Returns (numeric_value, unit_string).
-                    
-                    Returns short unit symbols for display: 'mm', 'cm', 'm', 'ft', '"'
-                    """
-                    if not value_str:
-                        raise ValueError(f"Empty {field_name} value")
-                    
-                    numeric_value, unit = parse_dimension_with_unit(value_str)
-                    if numeric_value is None:
-                        raise ValueError(f"Could not extract numeric value from {field_name} '{value_str}'")
-                    
-                    # Convert full unit names to short symbols for display
-                    unit_map = {
-                        'millimeters': 'mm',
-                        'centimeters': 'cm',
-                        'meters': 'm',
-                        'feet': 'ft',
-                        'inches': '"'
-                    }
-                    # If no unit detected, default based on value size
-                    if unit is None:
-                        unit_symbol = 'mm' if numeric_value > 100 else '"'
-                    else:
-                        unit_symbol = unit_map.get(unit, '"')
-                    
-                    return (numeric_value, unit_symbol)
                 
                 # Handle other_table products (diameter-based) differently
                 if is_other_table:
