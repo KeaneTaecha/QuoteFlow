@@ -145,6 +145,7 @@ class QuotationApp(QMainWindow):
         self.excel_exporter = ExcelQuotationExporter()
         self.font_size_multiplier = 1.0  # Default font size multiplier
         self.original_fonts = {}  # Store original font sizes for widgets
+        self.font_scale_excluded_widgets = []  # Widgets that keep constant size
         self.table_item_base_font_size = 13  # Base font size for table items
         self.init_ui()
         self.load_price_list()
@@ -182,6 +183,8 @@ class QuotationApp(QMainWindow):
         # Decrease button (-)
         self.text_size_decrease_button = QPushButton('−')
         self.text_size_decrease_button.setToolTip('Decrease text size')
+        self.text_size_decrease_button.setFixedWidth(28)
+        self.text_size_decrease_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.text_size_decrease_button.setStyleSheet('''
             QPushButton {
                 background-color: #7B68EE;
@@ -209,29 +212,36 @@ class QuotationApp(QMainWindow):
             }
         ''')
         self.text_size_decrease_button.clicked.connect(self.decrease_text_size)
-        text_size_layout.addWidget(self.text_size_decrease_button)
+        self.font_scale_excluded_widgets.append(self.text_size_decrease_button)
+        text_size_layout.addWidget(self.text_size_decrease_button, 0)  # Stretch factor 0
         
         # Size label showing current percentage
         self.text_size_label = QLabel('100%')
         self.text_size_label.setToolTip('Current text size')
         self.text_size_label.setAlignment(Qt.AlignCenter)
-        self.text_size_label.setStyleSheet('''
-            QLabel {
+        label_width = 50
+        self.text_size_label.setFixedWidth(label_width)  # Fixed width to prevent expansion
+        self.text_size_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Prevent size changes
+        self.text_size_label.setStyleSheet(f'''
+            QLabel {{
                 background-color: #7B68EE;
                 color: white;
                 font-weight: bold;
-                font-size: 10px;
+                font-size: 12px;
                 padding: 4px 6px;
                 border: none;
-                min-width: 35px;
-                max-width: 35px;
-            }
+                min-width: {label_width}px;
+                max-width: {label_width}px;
+            }}
         ''')
-        text_size_layout.addWidget(self.text_size_label)
+        self.font_scale_excluded_widgets.append(self.text_size_label)
+        text_size_layout.addWidget(self.text_size_label, 0)  # Stretch factor 0
         
         # Increase button (+)
         self.text_size_increase_button = QPushButton('+')
         self.text_size_increase_button.setToolTip('Increase text size')
+        self.text_size_increase_button.setFixedWidth(28)
+        self.text_size_increase_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.text_size_increase_button.setStyleSheet('''
             QPushButton {
                 background-color: #7B68EE;
@@ -259,9 +269,18 @@ class QuotationApp(QMainWindow):
             }
         ''')
         self.text_size_increase_button.clicked.connect(self.increase_text_size)
-        text_size_layout.addWidget(self.text_size_increase_button)
+        self.font_scale_excluded_widgets.append(self.text_size_increase_button)
+        text_size_layout.addWidget(self.text_size_increase_button, 0)  # Stretch factor 0
+
+        # Match label height to buttons so all three controls line up
+        button_height = max(
+            self.text_size_decrease_button.sizeHint().height(),
+            self.text_size_increase_button.sizeHint().height()
+        )
+        self.text_size_label.setFixedHeight(button_height)
         
         text_size_container.setLayout(text_size_layout)
+        text_size_container.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)  # Prevent container expansion
         title_bar.addWidget(text_size_container)
         
         title_widget = QWidget()
@@ -748,18 +767,22 @@ class QuotationApp(QMainWindow):
         # Buttons for table operations
         button_layout = QHBoxLayout()
         
-        # Upload Excel button (smaller)
+        # Upload Excel button
         self.upload_excel_button = QPushButton('Upload Excel')
         self.upload_excel_button.setStyleSheet('''
             QPushButton {
-                background-color: #9C27B0;
+                background-color: #4CAF50;
                 color: white;
-                padding: 5px 10px;
                 font-weight: bold;
-                font-size: 11px;
+                padding-left: 15px;
+                padding-right: 15px;
             }
             QPushButton:hover {
-                background-color: #7B1FA2;
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
             }
         ''')
         self.upload_excel_button.clicked.connect(self.upload_excel_file)
@@ -806,10 +829,42 @@ class QuotationApp(QMainWindow):
         button_layout.addWidget(self.move_down_button)
         
         self.remove_button = QPushButton('Remove Selected Item')
+        self.remove_button.setStyleSheet('''
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-weight: bold;
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
+            }
+        ''')
         self.remove_button.clicked.connect(self.remove_selected_item)
         button_layout.addWidget(self.remove_button)
         
         self.clear_button = QPushButton('Clear All Items')
+        self.clear_button.setStyleSheet('''
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-weight: bold;
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #888888;
+            }
+        ''')
         self.clear_button.clicked.connect(self.clear_all_items)
         button_layout.addWidget(self.clear_button)
         
@@ -843,21 +898,6 @@ class QuotationApp(QMainWindow):
         """Create action buttons for save, print, excel export, etc."""
         widget = QWidget()
         layout = QHBoxLayout()
-        
-        self.new_button = QPushButton('New Quote')
-        self.new_button.setStyleSheet('''
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        ''')
-        self.new_button.clicked.connect(self.new_quote)
-        layout.addWidget(self.new_button)
         
         # Excel export button
         self.excel_button = QPushButton('Generate Excel Quotation')
@@ -1880,33 +1920,16 @@ class QuotationApp(QMainWindow):
             self.update_move_button_states()
             self.statusBar().showMessage('All items cleared')
     
-    def new_quote(self):
-        """Start a new quote"""
-        if self.quote_items:
-            reply = QMessageBox.question(self, 'Confirm', 
-                                        'Start a new quote? Current items will be cleared.',
-                                        QMessageBox.Yes | QMessageBox.No)
-            if reply == QMessageBox.No:
-                return
-        
-        self.quote_items = []
-        self.to_input.clear()
-        self.company_input.clear()
-        self.tel_input.clear()
-        self.fax_input.clear()
-        self.project_input.clear()
-        self.detail_input.clear()
-        self.quote_number.setText(f"{datetime.now().strftime('%y-%m')}{datetime.now().day:03d}")
-        self.refresh_items_table()
-        self.statusBar().showMessage('New quote started')
-    
     def store_original_fonts(self):
         """Store original font sizes for all widgets"""
         # Find all widgets recursively
         all_widgets = self.findChildren(QWidget)
+        excluded_ids = {id(w) for w in getattr(self, 'font_scale_excluded_widgets', []) if w}
         
         for widget in all_widgets:
             widget_id = id(widget)
+            if widget_id in excluded_ids:
+                continue
             if widget_id not in self.original_fonts:
                 # Get current font
                 current_font = widget.font()
@@ -1932,9 +1955,12 @@ class QuotationApp(QMainWindow):
         
         # Find all widgets and apply font size
         all_widgets = self.findChildren(QWidget)
+        excluded_ids = {id(w) for w in getattr(self, 'font_scale_excluded_widgets', []) if w}
         
         for widget in all_widgets:
             widget_id = id(widget)
+            if widget_id in excluded_ids:
+                continue
             if widget_id in self.original_fonts:
                 original_font = self.original_fonts[widget_id]['font']
                 new_size = max(1, int(original_font.pointSize() * multiplier))
