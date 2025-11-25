@@ -11,6 +11,7 @@ def get_filter_price(price_loader: PriceCalculator, filter_type: str, max_dimens
                      width_inches: float, height_inches: float) -> Optional[float]:
     """
     Find filter product in database and get its price for default table products only.
+    Uses get_price_for_default_table to handle exceeded dimensions correctly.
     
     Args:
         price_loader: PriceCalculator instance for database access
@@ -51,41 +52,16 @@ def get_filter_price(price_loader: PriceCalculator, filter_type: str, max_dimens
     # Ensure width >= height (database convention)
     filter_width = max(width_inches, height_inches)
     filter_height = min(width_inches, height_inches)
-    price = get_base_price_for_default_table(price_loader, matching_filter, filter_width, filter_height)
-    return price if price and price > 0 else None
-
-
-def get_base_price_for_default_table(price_loader: PriceCalculator, product: str, 
-                                     width_inches: float, height_inches: float) -> Optional[float]:
-    """
-    Get base price for default table product directly from database.
     
-    Args:
-        price_loader: PriceCalculator instance for database access
-        product: Product model name
-        width_inches: Width in inches
-        height_inches: Height in inches
-        
-    Returns:
-        Base price or None if not found
-    """
-    db = price_loader.db
-    table_id = db.get_table_id(product)
-    if table_id is None:
+    # Build size string in the format expected by get_price_for_default_table
+    size_str = f'{int(filter_width)}" x {int(filter_height)}"'
+    
+    try:
+        # Use get_price_for_default_table which handles exceeded dimensions correctly
+        # Pass finish=None and with_damper=False to get base price with modifiers applied
+        price, _ = price_loader.get_price_for_default_table(matching_filter, None, size_str, with_damper=False)
+        return price if price and price > 0 else None
+    except Exception:
+        # If price calculation fails, return None
         return None
-    
-    width_int = int(width_inches)
-    height_int = int(height_inches)
-    
-    # Try exact match first
-    price_result = db.get_price_for_dimensions(table_id, height_int, width_int)
-    if price_result:
-        return price_result[0]  # Return normal_price
-    
-    # If no exact match, find closest
-    closest = db.find_closest_price_for_dimensions(table_id, height_int, width_int)
-    if closest:
-        return closest[2]  # Return normal_price from closest match
-    
-    return None
 
