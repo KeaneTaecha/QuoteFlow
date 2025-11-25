@@ -8,7 +8,7 @@ A PyQt5-based quotation management system with dynamic product configuration usi
 QuoteFlow/
 ├── main.py                      # Entry point - run this!
 ├── quotation_ui.py              # UI components and main window
-├── price_loader.py              # Price list loader from SQLite
+├── price_calculator.py              # Price calculator using SQLite database
 ├── getsql.py                    # Excel to SQLite converter
 ├── price_list_modified.xlsx     # Excel price data with Header sheet
 ├── prices.db                    # SQLite database (auto-generated)
@@ -127,7 +127,7 @@ Run `python getsql.py` again when:
 2. **getsql.py** reads the Header sheet and converts Excel to SQLite
 3. **Database** stores products and prices efficiently
 4. **UI** dynamically loads available products from the database
-5. **Price Loader** retrieves prices based on product and size selection
+5. **Price Calculator** calculates prices based on product and size selection
 
 ## Workflow
 
@@ -181,7 +181,7 @@ python test_header_integration.py
 This verifies:
 - Header sheet reading
 - Database structure
-- Price loader functionality
+- Price calculator functionality
 - UI integration
 
 ## Development
@@ -189,7 +189,7 @@ This verifies:
 The code is modularized for easy maintenance:
 
 - **getsql.py**: Excel to SQLite conversion, reads Header sheet
-- **price_loader.py**: Loads prices from SQLite database
+- **price_calculator.py**: Calculates prices using SQLite database
 - **quotation_ui.py**: PyQt5 GUI components and user interactions
 - **main.py**: Simple entry point that launches the application
 
@@ -201,7 +201,7 @@ The code is modularized for easy maintenance:
 
 ### To Modify Price Loading:
 
-- Edit `price_loader.py` for price calculation logic
+- Edit `price_calculator.py` for price calculation logic
 - Edit `getsql.py` for database structure changes
 
 ### To Modify UI:

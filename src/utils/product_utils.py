@@ -220,21 +220,21 @@ def find_matching_product(product: str, available_models: List[str],
     return None
 
 
-def validate_filter_exists(filter_type: str, price_loader: PriceCalculator) -> bool:
+def validate_filter_exists(filter_type: str, price_calculator: PriceCalculator) -> bool:
     """
     Validate if a filter type exists in the database.
     
     Args:
         filter_type: Filter type to validate (e.g., "Nylon")
-        price_loader: PriceCalculator instance for database access
+        price_calculator: PriceCalculator instance for database access
         
     Returns:
         True if filter exists, False otherwise
     """
-    if not filter_type or not price_loader:
+    if not filter_type or not price_calculator:
         return False
     
-    all_models = price_loader.get_available_models()
+    all_models = price_calculator.get_available_models()
     filter_type_lower = filter_type.lower()
     
     # Search for filter product that matches the filter type
@@ -245,20 +245,20 @@ def validate_filter_exists(filter_type: str, price_loader: PriceCalculator) -> b
     return False
 
 
-def get_product_type_flags(price_loader: PriceCalculator, product: str) -> Tuple[bool, bool, bool]:
+def get_product_type_flags(price_calculator: PriceCalculator, product: str) -> Tuple[bool, bool, bool]:
     """
     Get product type flags (has_no_dimensions, has_price_per_foot, is_other_table).
     Consolidates the logic for determining product type characteristics.
     
     Args:
-        price_loader: PriceCalculator instance
+        price_calculator: PriceCalculator instance
         product: Product model name
         
     Returns:
         Tuple of (has_no_dimensions, has_price_per_foot, is_other_table)
     """
-    has_no_dimensions = price_loader.has_no_dimensions(product)
-    has_price_per_foot = price_loader.has_price_per_foot(product)
+    has_no_dimensions = price_calculator.has_no_dimensions(product)
+    has_price_per_foot = price_calculator.has_price_per_foot(product)
     
     # Determine is_other_table based on product characteristics
     # If has_no_dimensions is true, is_other_table must be false (no height = no diameter)
@@ -266,7 +266,7 @@ def get_product_type_flags(price_loader: PriceCalculator, product: str) -> Tuple
         is_other_table = False
     else:
         # Only check if it's NOT a price_per_foot product
-        is_other_table = price_loader.is_other_table(product) if not has_price_per_foot else False
+        is_other_table = price_calculator.is_other_table(product) if not has_price_per_foot else False
     
     return has_no_dimensions, has_price_per_foot, is_other_table
 
@@ -352,17 +352,17 @@ def parse_dimension_with_unit(value_str: str) -> Tuple[Optional[float], Optional
 
 
 def validate_product_exists(base_product: str, available_models: List[str], 
-                            price_loader: Optional[PriceCalculator] = None,
+                            price_calculator: Optional[PriceCalculator] = None,
                             filter_type: Optional[str] = None,
                             has_wd: Optional[bool] = None) -> Tuple[bool, Optional[str], bool, Optional[str]]:
     """
     Validate if a product exists in the available models and return normalized product info.
-    Optionally validates filter if price_loader is provided.
+    Optionally validates filter if price_calculator is provided.
     
     Args:
         base_product: Base product name to validate (without WD, INS, or filter suffixes)
         available_models: List of available product models
-        price_loader: Optional PriceCalculator for filter validation
+        price_calculator: Optional PriceCalculator for filter validation
         filter_type: Optional filter type to validate
         has_wd: Optional pre-extracted WD flag (avoids redundant extraction)
         
@@ -382,9 +382,9 @@ def validate_product_exists(base_product: str, available_models: List[str],
     if has_wd is None:
         _, has_wd, _, _ = extract_product_flags_and_filter(base_product)
     
-    # Validate filter if present and price_loader is available
-    if filter_type and price_loader:
-        if not validate_filter_exists(filter_type, price_loader):
+    # Validate filter if present and price_calculator is available
+    if filter_type and price_calculator:
+        if not validate_filter_exists(filter_type, price_calculator):
             return False, None, False, f'Filter "{filter_type}" not found in database'
     
     # Use find_matching_product to handle all matching logic (WD variants, base product, fuzzy matching)

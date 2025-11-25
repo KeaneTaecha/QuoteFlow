@@ -141,7 +141,7 @@ class QuotationApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.quote_items = []
-        self.price_loader = None
+        self.price_calculator = None
         self.excel_exporter = ExcelQuotationExporter()
         self.font_size_multiplier = 1.0  # Default font size multiplier
         self.original_fonts = {}  # Store original font sizes for widgets
@@ -1025,10 +1025,10 @@ class QuotationApp(QMainWindow):
             return
         
         try:
-            self.price_loader = PriceCalculator(db_file)
+            self.price_calculator = PriceCalculator(db_file)
             
             # Store available models for searching
-            base_models = self.price_loader.get_available_models()
+            base_models = self.price_calculator.get_available_models()
             # Add "(WD)" variants for products that have damper option
             self.available_models = []
             for model in base_models:
@@ -1036,10 +1036,10 @@ class QuotationApp(QMainWindow):
                 self.available_models.append(model)
                 # Check if this product has damper option for any finish
                 # We check by trying to get available finishes - if it has damper, add WD variant
-                finishes = self.price_loader.get_available_finishes(model)
+                finishes = self.price_calculator.get_available_finishes(model)
                 has_damper = False
                 for finish in finishes:
-                    if self.price_loader.has_damper_option(model):
+                    if self.price_calculator.has_damper_option(model):
                         has_damper = True
                         break
                 if has_damper:
@@ -1058,14 +1058,14 @@ class QuotationApp(QMainWindow):
     
     def on_product_changed(self):
         """Handle product type change"""
-        if not self.price_loader:
+        if not self.price_calculator:
             return
         
         # Get available finish options for the selected product
         product_with_wd = self.product_input.text().strip()
         product, _, _, _ = extract_product_flags_and_filter(product_with_wd)
         if product:
-            available_finishes = self.price_loader.get_available_finishes(product)
+            available_finishes = self.price_calculator.get_available_finishes(product)
             
             # Update finish combo box with available options
             self.finish_combo.clear()
@@ -1078,7 +1078,7 @@ class QuotationApp(QMainWindow):
                 self.finish_combo.addItem('No finishes available')
             
             # Get product type flags using consolidated helper
-            has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
+            has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
             
             if has_no_dimensions:
                 # For products with no dimensions, show only height field
@@ -1180,7 +1180,7 @@ class QuotationApp(QMainWindow):
     
     def on_product_selected(self):
         """Handle when user presses Enter or selects a product"""
-        if not self.price_loader:
+        if not self.price_calculator:
             return
         
         product_with_wd = self.product_input.text().strip()
@@ -1254,7 +1254,7 @@ class QuotationApp(QMainWindow):
     
     def on_selection_changed(self):
         """Handle selection changes"""
-        if not self.price_loader:
+        if not self.price_calculator:
             return
         
         product_with_wd = self.product_input.text().strip()
@@ -1369,7 +1369,7 @@ class QuotationApp(QMainWindow):
     
     def update_price_display(self):
         """Update the price display based on current selections"""
-        if not self.price_loader:
+        if not self.price_calculator:
             return
         
         product_with_wd = self.product_input.text().strip()
@@ -1410,13 +1410,13 @@ class QuotationApp(QMainWindow):
         
         # Get product type flags using consolidated helper
         if product:
-            has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
+            has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
         else:
             has_no_dimensions = has_price_per_foot = is_other_table = False
         
         if has_no_dimensions:
             # Handle products with no height/width - extract price_id first
-            price_id = self.price_loader.get_price_id_for_no_dimensions(product)
+            price_id = self.price_calculator.get_price_id_for_no_dimensions(product)
             if price_id is None:
                 self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')
@@ -1430,12 +1430,12 @@ class QuotationApp(QMainWindow):
                 height = self.height_spin.value()
                 unit = self.unit_combo.currentText()
                 height_inches = convert_dimension_to_inches(height, unit)
-                unit_price, _ = self.price_loader.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id, height_unit=unit)
+                unit_price, _ = self.price_calculator.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id, height_unit=unit)
                 self.rounded_size_label.setText('N/A')
             elif is_other_table:
                 # For other table products with no dimensions, use find_rounded_other_table_size with price_id
                 try:
-                    rounded_size = self.price_loader.find_rounded_other_table_size(product, 0, price_id=price_id)
+                    rounded_size = self.price_calculator.find_rounded_other_table_size(product, 0, price_id=price_id)
                 except Exception:
                     self.unit_price_label.setText('N/A')
                     self.total_price_label.setText('฿ 0.00')
@@ -1444,7 +1444,7 @@ class QuotationApp(QMainWindow):
                 
                 self.rounded_size_label.setText(rounded_size)
                 # Get price using the rounded size
-                unit_price, _ = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+                unit_price, _ = self.price_calculator.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
 
         elif has_price_per_foot:
             # Handle price_per_foot products - require width and height
@@ -1457,7 +1457,7 @@ class QuotationApp(QMainWindow):
             
             # Find the rounded height that matches database (for other tables, size is stored in height column)
             try:
-                rounded_height = self.price_loader.find_rounded_price_per_foot_width(product, height_inches)
+                rounded_height = self.price_calculator.find_rounded_price_per_foot_width(product, height_inches)
             except Exception:
                 self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')
@@ -1470,7 +1470,7 @@ class QuotationApp(QMainWindow):
             # Get price using price_per_foot formula: (width / 12) × price_per_foot
             # Note: rounded_height is passed as 'width' parameter (to match database), width_inches is passed as 'height' (dimension to multiply)
             # height_unit should be the unit of the original height dimension (which is width_inches in this case, using 'unit')
-            unit_price, _ = self.price_loader.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier, height_unit=unit)
+            unit_price, _ = self.price_calculator.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier, height_unit=unit)
         elif is_other_table:
             # Handle other table products
             height = self.other_table_spin.value()
@@ -1480,7 +1480,7 @@ class QuotationApp(QMainWindow):
             
             # Find the rounded up size for pricing
             try:
-                rounded_size = self.price_loader.find_rounded_other_table_size(product, height_inches)
+                rounded_size = self.price_calculator.find_rounded_other_table_size(product, height_inches)
             except Exception:
                 self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')
@@ -1491,7 +1491,7 @@ class QuotationApp(QMainWindow):
             self.rounded_size_label.setText(rounded_size)
             
             # Get price using the rounded size
-            unit_price, _ = self.price_loader.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            unit_price, _ = self.price_calculator.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
         else:
             # Handle width/height-based products
             width = self.width_spin.value()
@@ -1510,7 +1510,7 @@ class QuotationApp(QMainWindow):
             
             # Find the rounded up size for pricing
             try:
-                rounded_size = self.price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches)
+                rounded_size = self.price_calculator.find_rounded_default_table_size(product, finish, width_inches, height_inches)
             except Exception:
                 # If we can't find rounded size, use actual dimensions (might be exceeded dimensions)
                 rounded_size = None
@@ -1525,7 +1525,7 @@ class QuotationApp(QMainWindow):
             
             # Get price using the rounded size (handles exceeded dimensions internally)
             try:
-                unit_price, _ = self.price_loader.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+                unit_price, _ = self.price_calculator.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
             except Exception:
                 self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')
@@ -1553,7 +1553,7 @@ class QuotationApp(QMainWindow):
     
     def add_item_to_quote(self):
         """Add the selected item to the quote"""
-        if not self.price_loader:
+        if not self.price_calculator:
             QMessageBox.warning(self, 'Error', 'Price database not loaded. Please wait for the database to load.')
             return
         
@@ -1607,7 +1607,7 @@ class QuotationApp(QMainWindow):
             # Get product type flags using consolidated helper
             # Wrap in try-except to catch database errors
             try:
-                has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
+                has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
             except Exception as e:
                 QMessageBox.critical(self, 'Error', f'Failed to get product information: {str(e)}\n\nPlease check that the product exists in the database.')
                 return
@@ -1645,7 +1645,7 @@ class QuotationApp(QMainWindow):
             # Wrap in try-except to catch any unexpected exceptions
             try:
                 item, error = build_quote_item(
-                    price_loader=self.price_loader,
+                    price_calculator=self.price_calculator,
                     product=product,
                     finish=finish,
                     quantity=quantity,
@@ -2039,7 +2039,7 @@ class QuotationApp(QMainWindow):
     
     def upload_excel_file(self):
         """Handle Excel file upload and extract items with progress dialog"""
-        if not self.price_loader:
+        if not self.price_calculator:
             QMessageBox.warning(self, 'Warning', 'Price database not loaded. Please wait for the database to load.')
             return
         
@@ -2059,7 +2059,7 @@ class QuotationApp(QMainWindow):
         try:
             # Create Excel importer
             progress_dialog.update_progress(5, 'Initializing importer...')
-            importer = ExcelItemImporter(self.price_loader, self.available_models)
+            importer = ExcelItemImporter(self.price_calculator, self.available_models)
             
             # Parse the Excel file with progress callback
             # The parsing will take 5% to 90% of progress

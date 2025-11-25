@@ -7,14 +7,14 @@ from typing import Optional
 from utils.price_calculator import PriceCalculator
 
 
-def get_filter_price(price_loader: PriceCalculator, filter_type: str, max_dimension: float,
+def get_filter_price(price_calculator: PriceCalculator, filter_type: str, max_dimension: float,
                      width_inches: float, height_inches: float) -> Optional[float]:
     """
     Find filter product in database and get its price for default table products only.
     Uses get_price_for_default_table to handle exceeded dimensions correctly.
     
     Args:
-        price_loader: PriceCalculator instance for database access
+        price_calculator: PriceCalculator instance for database access
         filter_type: The filter type (e.g., "Nylon")
         max_dimension: The maximum dimension (max of width and height) in inches
         width_inches: Width in inches for dimension-based filters
@@ -23,11 +23,11 @@ def get_filter_price(price_loader: PriceCalculator, filter_type: str, max_dimens
     Returns:
         Filter price or None if not found
     """
-    if not price_loader:
+    if not price_calculator:
         return None
     
     # Get all available models
-    all_models = price_loader.get_available_models()
+    all_models = price_calculator.get_available_models()
     
     # Search for filter product that matches the filter type
     filter_type_lower = filter_type.lower()
@@ -44,7 +44,7 @@ def get_filter_price(price_loader: PriceCalculator, filter_type: str, max_dimens
         return None
     
     # Get available finishes for the filter
-    finishes = price_loader.get_available_finishes(matching_filter)
+    finishes = price_calculator.get_available_finishes(matching_filter)
     if not finishes:
         return None
     
@@ -59,7 +59,7 @@ def get_filter_price(price_loader: PriceCalculator, filter_type: str, max_dimens
     try:
         # Use get_price_for_default_table which handles exceeded dimensions correctly
         # Pass finish=None and with_damper=False to get base price with modifiers applied
-        price, _ = price_loader.get_price_for_default_table(matching_filter, None, size_str, with_damper=False)
+        price, _ = price_calculator.get_price_for_default_table(matching_filter, None, size_str, with_damper=False)
         return price if price and price > 0 else None
     except Exception:
         # If price calculation fails, return None

@@ -58,11 +58,11 @@ def _build_original_size(width, height, width_unit, height_unit,
     return None
 
 
-def _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches=None, height_inches=None):
+def _calculate_filter_and_ins(price_calculator, filter_type, has_ins, width_inches=None, height_inches=None):
     """Calculate filter and INS prices for default table products only.
     
     Args:
-        price_loader: PriceCalculator instance
+        price_calculator: PriceCalculator instance
         filter_type: Optional filter type (e.g., "Nylon")
         has_ins: Whether product has INS option
         width_inches: Width in inches (required for filter calculation)
@@ -74,7 +74,7 @@ def _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches=N
     filter_price = 0.0
     if filter_type:
         if width_inches is not None and height_inches is not None:
-            filter_price = get_filter_price(price_loader, filter_type, max(width_inches, height_inches), width_inches, height_inches)
+            filter_price = get_filter_price(price_calculator, filter_type, max(width_inches, height_inches), width_inches, height_inches)
             if filter_price is None:
                 raise ValueError(f'Filter "{filter_type}" not found in database')
         else:
@@ -85,7 +85,7 @@ def _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches=N
 
 
 def build_quote_item(
-    price_loader: PriceCalculator,
+    price_calculator: PriceCalculator,
     product: str,
     finish: Optional[str],
     quantity: int,
@@ -109,7 +109,7 @@ def build_quote_item(
     Build a quote item with pricing calculations.
     
     Args:
-        price_loader: PriceCalculator instance
+        price_calculator: PriceCalculator instance
         product: Base product name (without WD suffix)
         finish: Finish name
         quantity: Quantity
@@ -148,7 +148,7 @@ def build_quote_item(
     # Handle no_dimensions products
     if has_no_dimensions:
         try:
-            price_id = price_loader.get_price_id_for_no_dimensions(product)
+            price_id = price_calculator.get_price_id_for_no_dimensions(product)
         except ProductNotFoundError as e:
             return None, str(e)
         
@@ -163,14 +163,14 @@ def build_quote_item(
             except ValueError as e:
                 return None, str(e)
             try:
-                table_price, _ = price_loader.get_price_for_price_per_foot(
+                table_price, _ = price_calculator.get_price_for_price_per_foot(
                     product, None, 0, height_inches, has_wd, 1.0, price_id=price_id, height_unit=height_unit
                 )
             except (ProductNotFoundError, PriceNotFoundError) as e:
                 return None, str(e)
             
             try:
-                price_after_finish, finish_multiplier = price_loader.get_price_for_price_per_foot(
+                price_after_finish, finish_multiplier = price_calculator.get_price_for_price_per_foot(
                     product, finish, 0, height_inches, has_wd, special_color_multiplier, price_id=price_id, height_unit=height_unit
                 )
             except (ProductNotFoundError, PriceNotFoundError) as e:
@@ -197,19 +197,19 @@ def build_quote_item(
             warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
         
         try:
-            rounded_height = price_loader.find_rounded_price_per_foot_width(product, int(round(height_inches)))
+            rounded_height = price_calculator.find_rounded_price_per_foot_width(product, int(round(height_inches)))
         except SizeNotFoundError as e:
             return None, str(e)
         
         try:
             # width_inches is passed as 'height' parameter (dimension to multiply), so use width_unit
-            table_price, _ = price_loader.get_price_for_price_per_foot(product, None, rounded_height, width_inches, has_wd, 1.0, height_unit=width_unit)
+            table_price, _ = price_calculator.get_price_for_price_per_foot(product, None, rounded_height, width_inches, has_wd, 1.0, height_unit=width_unit)
         except (ProductNotFoundError, PriceNotFoundError) as e:
             return None, str(e)
         
         try:
             # width_inches is passed as 'height' parameter (dimension to multiply), so use width_unit
-            price_after_finish, finish_multiplier = price_loader.get_price_for_price_per_foot(
+            price_after_finish, finish_multiplier = price_calculator.get_price_for_price_per_foot(
                 product, finish, rounded_height, width_inches, has_wd, special_color_multiplier, height_unit=width_unit
             )
         except (ProductNotFoundError, PriceNotFoundError) as e:
@@ -230,17 +230,17 @@ def build_quote_item(
             return None, str(e)
         
         try:
-            rounded_size = price_loader.find_rounded_other_table_size(product, height_inches)
+            rounded_size = price_calculator.find_rounded_other_table_size(product, height_inches)
         except SizeNotFoundError:
             rounded_size = f'{height_inches}" diameter'
         
         try:
-            table_price, _ = price_loader.get_price_for_other_table(product, None, rounded_size, has_wd, 1.0)
+            table_price, _ = price_calculator.get_price_for_other_table(product, None, rounded_size, has_wd, 1.0)
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
         try:
-            price_after_finish, finish_multiplier = price_loader.get_price_for_other_table(product, finish, rounded_size, has_wd, special_color_multiplier)
+            price_after_finish, finish_multiplier = price_calculator.get_price_for_other_table(product, finish, rounded_size, has_wd, special_color_multiplier)
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
@@ -275,20 +275,20 @@ def build_quote_item(
             width_unit, height_unit = height_unit, width_unit
             warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
         
-        rounded_size = price_loader.find_rounded_default_table_size(product, finish, width_inches, height_inches) or f'{width_inches}" x {height_inches}"'
+        rounded_size = price_calculator.find_rounded_default_table_size(product, finish, width_inches, height_inches) or f'{width_inches}" x {height_inches}"'
         
         try:
-            table_price, _ = price_loader.get_price_for_default_table(product, None, rounded_size, has_wd, 1.0)
+            table_price, _ = price_calculator.get_price_for_default_table(product, None, rounded_size, has_wd, 1.0)
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
         try:
-            price_after_finish, finish_multiplier = price_loader.get_price_for_default_table(product, finish, rounded_size, has_wd, special_color_multiplier)
+            price_after_finish, finish_multiplier = price_calculator.get_price_for_default_table(product, finish, rounded_size, has_wd, special_color_multiplier)
         except (ProductNotFoundError, PriceNotFoundError, ValueError) as e:
             return None, str(e)
         
         try:
-            filter_price, ins_price = _calculate_filter_and_ins(price_loader, filter_type, has_ins, width_inches, height_inches)
+            filter_price, ins_price = _calculate_filter_and_ins(price_calculator, filter_type, has_ins, width_inches, height_inches)
         except ValueError as e:
             return None, str(e)
         
@@ -296,7 +296,7 @@ def build_quote_item(
         # This allows handgear to be displayed separately in the INS column in Excel
         # Note: Handgear is no longer included in price_after_finish (removed from get_price_for_default_table)
         if product in ['VD-G', 'VD-M', 'RVD-G', 'RVD-M']:
-            hand_gear_addition = price_loader.get_hand_gear_price(product, width_inches, height_inches)
+            hand_gear_addition = price_calculator.get_hand_gear_price(product, width_inches, height_inches)
             ins_price = ins_price + hand_gear_addition
     
     # Build original size

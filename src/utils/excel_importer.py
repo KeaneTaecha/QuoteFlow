@@ -20,15 +20,15 @@ from utils.product_utils import parse_dimension_with_unit
 class ExcelItemImporter:
     """Handles importing items from Excel files"""
     
-    def __init__(self, price_loader: PriceCalculator, available_models: List[str]):
+    def __init__(self, price_calculator: PriceCalculator, available_models: List[str]):
         """
         Initialize the Excel importer
         
         Args:
-            price_loader: PriceCalculator instance for database access
+            price_calculator: PriceCalculator instance for database access
             available_models: List of available product models
         """
-        self.price_loader = price_loader
+        self.price_calculator = price_calculator
         self.available_models = available_models
     
     def parse_excel_file(self, file_path: str, progress_callback=None) -> List[Dict]:
@@ -302,7 +302,7 @@ class ExcelItemImporter:
         # Validate and get normalized product info (with filter validation)
         # Pass pre-extracted values to avoid redundant extraction
         product_exists, product, has_wd_from_db, error_msg = validate_product_exists(
-            base_model, self.available_models, self.price_loader, filter_type,
+            base_model, self.available_models, self.price_calculator, filter_type,
             has_wd=has_wd_from_name
         )
         
@@ -313,7 +313,7 @@ class ExcelItemImporter:
             return {'success': False, 'error': error_msg or f'Product "{model}" not found in database'}
         
         # Get product type flags using consolidated helper
-        has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_loader, product)
+        has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
         
         # Parse width and height with unit handling
         width, width_unit = parse_dimension_with_unit(width_value)
@@ -337,7 +337,7 @@ class ExcelItemImporter:
             return {'success': False, 'error': 'Missing dimensions (width and height)'}
         
         # Get available finishes
-        finishes = self.price_loader.get_available_finishes(product)
+        finishes = self.price_calculator.get_available_finishes(product)
         if not finishes:
             return {'success': False, 'error': f'No finishes available for product "{product}"'}
         
@@ -361,7 +361,7 @@ class ExcelItemImporter:
         
         # Use shared function to build quote item
         quote_item, error = build_quote_item(
-            price_loader=self.price_loader,
+            price_calculator=self.price_calculator,
             product=product,
             finish=finish,
             quantity=quantity,
