@@ -6,7 +6,7 @@ Handles other-type table detection and price extraction for the quotation system
 import re
 from typing import Optional, Tuple
 from table_models import TableLocation
-from ..excel_utils import get_cell_value
+from excel_utils import get_cell_value, is_cell_vertically_merged
 
 
 class OtherTableHandler:
@@ -130,9 +130,17 @@ class OtherTableHandler:
         price_count = 0
         
         # Detect if inch rows are separated or adjacent
-        # Check if the next row after width_row is also a valid width value
-        next_row_value = get_cell_value(sheet, table_loc.width_row + 1, table_loc.start_col)
-        is_separated = not self._is_valid_width_value(next_row_value, model_names)
+        # Check if the size column cell is vertically merged (spans multiple rows)
+        # If merged, rows are separated (size in merged cell, prices in separate rows)
+        is_size_merged = is_cell_vertically_merged(sheet, table_loc.width_row, table_loc.start_col)
+        
+        if is_size_merged:
+            # Size column is merged, so rows are separated
+            is_separated = True
+        else:
+            # Check if the next row after width_row is also a valid width value
+            next_row_value = get_cell_value(sheet, table_loc.width_row + 1, table_loc.start_col)
+            is_separated = not self._is_valid_width_value(next_row_value, model_names)
         
         # First pass: identify price columns
         price_per_foot_col = None
@@ -180,7 +188,10 @@ class OtherTableHandler:
                         normal_price = float(cell_value)
                     
                     # Price with damper - adjust based on separation (only for valid price columns)
+                    # If size column is merged, damper price is always in the next row
                     if is_separated:
+                        # When size is merged, we need to get damper price from row + 1
+                        # The price columns are not merged, so we can read directly
                         damper_price_cell = get_cell_value(sheet, row + 1, col)
                         if damper_price_cell and isinstance(damper_price_cell, (int, float)):
                             damper_price = float(damper_price_cell)

@@ -4,6 +4,41 @@ Contains shared utility functions for reading Excel files, including merged cell
 """
 
 
+def is_cell_vertically_merged(sheet, row: int, col: int) -> bool:
+    """
+    Check if a cell is part of a vertically merged range (spans multiple rows).
+    
+    Args:
+        sheet: openpyxl worksheet object
+        row: Row number (1-indexed)
+        col: Column number (1-indexed)
+    
+    Returns:
+        True if the cell is part of a vertically merged range, False otherwise
+    """
+    try:
+        if hasattr(sheet, 'merged_cells') and sheet.merged_cells:
+            for merged_range in sheet.merged_cells.ranges:
+                if hasattr(merged_range, 'min_row'):
+                    # It's a CellRange object
+                    if (merged_range.min_row <= row <= merged_range.max_row and
+                        merged_range.min_col <= col <= merged_range.max_col):
+                        # Check if it spans multiple rows
+                        if merged_range.min_row < merged_range.max_row:
+                            return True
+                else:
+                    # It's a string range like "A1:B2", parse it
+                    from openpyxl.utils import range_boundaries
+                    min_col, min_row, max_col, max_row = range_boundaries(str(merged_range))
+                    if min_row <= row <= max_row and min_col <= col <= max_col:
+                        # Check if it spans multiple rows
+                        if min_row < max_row:
+                            return True
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return False
+
+
 def get_cell_value(sheet, row: int, col: int):
     """
     Get cell value, handling merged cells.

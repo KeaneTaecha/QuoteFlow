@@ -5,7 +5,7 @@ Handles default/standard table detection and price extraction for the quotation 
 
 from typing import Optional
 from table_models import TableLocation
-from ..excel_utils import get_cell_value
+from excel_utils import get_cell_value
 
 
 class DefaultTableHandler:
