@@ -19,6 +19,7 @@ from handlers.other_handler import OtherTableHandler
 from handlers.default_handler import DefaultTableHandler
 from handlers.header_handler import HeaderTableHandler
 from table_models import TableLocation
+from excel_utils import get_cell_value
 
 
 class ExcelToSQLiteConverter:
@@ -172,7 +173,7 @@ class ExcelToSQLiteConverter:
                     continue
                 
                 # Look for any content in the cell
-                cell_value = sheet.cell(row, col).value
+                cell_value = get_cell_value(sheet, row, col)
                 
                 # If there's something in the cell, try to find table boundaries
                 if cell_value is not None and str(cell_value).strip():
@@ -185,8 +186,7 @@ class ExcelToSQLiteConverter:
                         if row + offset > max_search_row:  # Bounds checking
                             break
                             
-                        below_cell = sheet.cell(row + offset, col)
-                        below_value = below_cell.value
+                        below_value = get_cell_value(sheet, row + offset, col)
                         
                         # Check if it's an inch value or matches a model name
                         cell_str = str(below_value).strip() if below_value is not None else ""
@@ -376,8 +376,10 @@ class ExcelToSQLiteConverter:
         # Load Excel file
         print(f"Loading Excel file...")
         try:
-            wb = openpyxl.load_workbook(self.excel_file, read_only=True, data_only=True)
-            print(f"✓ Loaded {len(wb.sheetnames)} sheets\n")
+            # Load without read_only to ensure merged_cells are accessible
+            # read_only mode doesn't fully support merged_cells access
+            wb = openpyxl.load_workbook(self.excel_file, read_only=False, data_only=True)
+            print(f"✓ Loaded {len(wb.sheetnames)} sheets (merged cells support enabled)\n")
         except Exception as e:
             print(f"❌ Error loading Excel file: {e}")
             return False

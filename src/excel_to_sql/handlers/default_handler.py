@@ -5,6 +5,7 @@ Handles default/standard table detection and price extraction for the quotation 
 
 from typing import Optional
 from table_models import TableLocation
+from ..excel_utils import get_cell_value
 
 
 class DefaultTableHandler:
@@ -19,7 +20,7 @@ class DefaultTableHandler:
         # Look for width row (containing inch values like "4"", "6"")
         width_row = None
         for row in range(start_row, start_row + 5):
-            cell_value = sheet.cell(row, start_col).value
+            cell_value = get_cell_value(sheet, row, start_col)
             if self.is_inch_value(cell_value):
                 width_row = row
                 break
@@ -30,7 +31,7 @@ class DefaultTableHandler:
         # Find height column
         height_col = None
         for col in range(start_col, start_col + 5):
-            cell_value = sheet.cell(start_row, col).value
+            cell_value = get_cell_value(sheet, start_row, col)
             if self.is_inch_value(cell_value):
                 height_col = col
                 break
@@ -42,7 +43,7 @@ class DefaultTableHandler:
         # Find the extent of height rows
         end_row = None
         for row in range(width_row + 2, sheet.max_row + 1, 2):
-            cell_value = sheet.cell(row, start_col).value
+            cell_value = get_cell_value(sheet, row, start_col)
             if not self.is_inch_value(cell_value):
                 end_row = row - 1
                 break
@@ -51,7 +52,7 @@ class DefaultTableHandler:
         # Find the end of height column
         end_col = None
         for col in range(height_col, sheet.max_column + 1):
-            cell_value = sheet.cell(start_row, col).value
+            cell_value = get_cell_value(sheet, start_row, col)
             if not self.is_inch_value(cell_value):
                 end_col = col - 1
                 break
@@ -81,12 +82,12 @@ class DefaultTableHandler:
         
         # Detect if inch rows are separated or adjacent
         # Check if the next row after width_row is also an inch row
-        next_row_value = sheet.cell(table_loc.width_row + 1, table_loc.start_col).value
+        next_row_value = get_cell_value(sheet, table_loc.width_row + 1, table_loc.start_col)
         is_separated = not self.is_inch_value(next_row_value)
         
         # Get height cell (from header row)
         for col in range(table_loc.height_col, table_loc.end_col + 1):
-            height = self.is_inch_value(sheet.cell(table_loc.start_row, col).value)
+            height = self.is_inch_value(get_cell_value(sheet, table_loc.start_row, col))
             if height is None:
                 continue
             
@@ -94,20 +95,20 @@ class DefaultTableHandler:
             step = 2 if is_separated else 1
             end_row = table_loc.end_row + 1 if not is_separated else table_loc.end_row
             for row in range(table_loc.width_row, end_row, step):
-                width = self.is_inch_value(sheet.cell(row, table_loc.start_col).value)
+                width = self.is_inch_value(get_cell_value(sheet, row, table_loc.start_col))
                 if width is None:
                     continue
                 
                 # Get prices
                 try:
                     # Normal price (inch row)
-                    normal_price_cell = sheet.cell(row, col).value
+                    normal_price_cell = get_cell_value(sheet, row, col)
                     normal_price = float(normal_price_cell) if normal_price_cell and isinstance(normal_price_cell, (int, float)) else None
                     
                     # Price with damper - adjust based on separation
                     if is_separated:
                         # Inch rows are separated by 1 row, damper price is in next row
-                        damper_price_cell = sheet.cell(row + 1, col).value
+                        damper_price_cell = get_cell_value(sheet, row + 1, col)
                         damper_price = float(damper_price_cell) if damper_price_cell and isinstance(damper_price_cell, (int, float)) else None
                     else:
                         # Inch rows are adjacent, no damper price
@@ -135,25 +136,25 @@ class DefaultTableHandler:
         
         try:
             # Detect if inch rows are separated or adjacent
-            next_row_value = sheet.cell(table_loc.width_row + 1, table_loc.start_col).value
+            next_row_value = get_cell_value(sheet, table_loc.width_row + 1, table_loc.start_col)
             is_separated = not self.is_inch_value(next_row_value)
             step = 2 if is_separated else 1
             end_row = table_loc.end_row + 1 if not is_separated else table_loc.end_row
             
             # Extract multipliers for each width row (height exceeded multipliers - regular and WD)
             for row in range(table_loc.width_row, end_row, step):
-                width = self.is_inch_value(sheet.cell(row, table_loc.start_col).value)
+                width = self.is_inch_value(get_cell_value(sheet, row, table_loc.start_col))
                 if width is None:
                     continue
                 
                 # Check for regular height exceeded multiplier in the column to the right of the table
-                height_mult_cell = sheet.cell(row, table_loc.end_col + 1).value
+                height_mult_cell = get_cell_value(sheet, row, table_loc.end_col + 1)
                 height_multiplier = None
                 if height_mult_cell is not None and isinstance(height_mult_cell, (int, float)):
                     height_multiplier = float(height_mult_cell)
                 
                 # Check for WD height exceeded multiplier (1 cell below regular multiplier)
-                height_mult_wd_cell = sheet.cell(row + 1, table_loc.end_col + 1).value
+                height_mult_wd_cell = get_cell_value(sheet, row + 1, table_loc.end_col + 1)
                 height_multiplier_wd = None
                 if height_mult_wd_cell is not None and isinstance(height_mult_wd_cell, (int, float)):
                     height_multiplier_wd = float(height_mult_wd_cell)
@@ -167,18 +168,18 @@ class DefaultTableHandler:
             
             # Extract multipliers for each height column (width exceeded multipliers - regular and WD)
             for col in range(table_loc.height_col, table_loc.end_col + 1):
-                height = self.is_inch_value(sheet.cell(table_loc.start_row, col).value)
+                height = self.is_inch_value(get_cell_value(sheet, table_loc.start_row, col))
                 if height is None:
                     continue
                 
                 # Check for regular width exceeded multiplier in the row below the table
-                width_mult_cell = sheet.cell(table_loc.end_row + 1, col).value
+                width_mult_cell = get_cell_value(sheet, table_loc.end_row + 1, col)
                 width_multiplier = None
                 if width_mult_cell is not None and isinstance(width_mult_cell, (int, float)):
                     width_multiplier = float(width_mult_cell)
                 
                 # Check for WD width exceeded multiplier (1 cell below regular multiplier)
-                width_mult_wd_cell = sheet.cell(table_loc.end_row + 2, col).value
+                width_mult_wd_cell = get_cell_value(sheet, table_loc.end_row + 2, col)
                 width_multiplier_wd = None
                 if width_mult_wd_cell is not None and isinstance(width_mult_wd_cell, (int, float)):
                     width_multiplier_wd = float(width_mult_wd_cell)

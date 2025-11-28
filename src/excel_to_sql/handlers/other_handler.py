@@ -6,6 +6,7 @@ Handles other-type table detection and price extraction for the quotation system
 import re
 from typing import Optional, Tuple
 from table_models import TableLocation
+from ..excel_utils import get_cell_value
 
 
 class OtherTableHandler:
@@ -41,7 +42,7 @@ class OtherTableHandler:
         # Look for width row (containing inch values like "4"", "6"" or model names)
         width_row = None
         for row in range(start_row, start_row + 5):
-            cell_value = sheet.cell(row, start_col).value
+            cell_value = get_cell_value(sheet, row, start_col)
             if self._is_valid_width_value(cell_value, model_names):
                 width_row = row
                 break
@@ -52,7 +53,7 @@ class OtherTableHandler:
         # Find height column (containing any values)
         height_col = None
         for col in range(start_col, start_col + 5):
-            cell_value = sheet.cell(start_row, col).value
+            cell_value = get_cell_value(sheet, start_row, col)
             if cell_value is not None and str(cell_value).strip():
                 height_col = col
                 break
@@ -64,7 +65,7 @@ class OtherTableHandler:
         # Find the extent of height rows
         end_row = None
         for row in range(width_row + 2, sheet.max_row + 1, 2):
-            cell_value = sheet.cell(row, start_col).value
+            cell_value = get_cell_value(sheet, row, start_col)
             if not self._is_valid_width_value(cell_value, model_names):
                 end_row = row - 1
                 break
@@ -73,7 +74,7 @@ class OtherTableHandler:
         # Find the end of height column
         end_col = None
         for col in range(height_col, sheet.max_column + 1):
-            cell_value = sheet.cell(start_row, col).value
+            cell_value = get_cell_value(sheet, start_row, col)
             if cell_value is None or not str(cell_value).strip():
                 end_col = col - 1
                 break
@@ -130,7 +131,7 @@ class OtherTableHandler:
         
         # Detect if inch rows are separated or adjacent
         # Check if the next row after width_row is also a valid width value
-        next_row_value = sheet.cell(table_loc.width_row + 1, table_loc.start_col).value
+        next_row_value = get_cell_value(sheet, table_loc.width_row + 1, table_loc.start_col)
         is_separated = not self._is_valid_width_value(next_row_value, model_names)
         
         # First pass: identify price columns
@@ -138,7 +139,7 @@ class OtherTableHandler:
         valid_price_cols = []
         
         for col in range(table_loc.height_col, table_loc.end_col + 1):
-            column_header = sheet.cell(table_loc.start_row, col).value
+            column_header = get_cell_value(sheet, table_loc.start_row, col)
             
             if self._is_price_per_feet_column(column_header):
                 price_per_foot_col = col
@@ -154,7 +155,7 @@ class OtherTableHandler:
         end_row = table_loc.end_row + 1 if not is_separated else table_loc.end_row
         
         for row in range(table_loc.width_row, end_row, step):
-            cell_value = sheet.cell(row, table_loc.start_col).value
+            cell_value = get_cell_value(sheet, row, table_loc.start_col)
             height = self._get_width_value(cell_value, model_names)
             # If width column contains model name, height will be None (saved as NULL in database)
             
@@ -166,7 +167,7 @@ class OtherTableHandler:
             try:
                 # Get price per foot from price_per_foot_col if it exists
                 if price_per_foot_col is not None:
-                    cell_value = sheet.cell(row, price_per_foot_col).value
+                    cell_value = get_cell_value(sheet, row, price_per_foot_col)
                     if cell_value and isinstance(cell_value, (int, float)):
                         price_per_foot = float(cell_value)
                 
@@ -174,13 +175,13 @@ class OtherTableHandler:
                 # Use the first valid price column found
                 if valid_price_cols:
                     col = valid_price_cols[0]  # Use first valid price column
-                    cell_value = sheet.cell(row, col).value
+                    cell_value = get_cell_value(sheet, row, col)
                     if cell_value and isinstance(cell_value, (int, float)):
                         normal_price = float(cell_value)
                     
                     # Price with damper - adjust based on separation (only for valid price columns)
                     if is_separated:
-                        damper_price_cell = sheet.cell(row + 1, col).value
+                        damper_price_cell = get_cell_value(sheet, row + 1, col)
                         if damper_price_cell and isinstance(damper_price_cell, (int, float)):
                             damper_price = float(damper_price_cell)
                 

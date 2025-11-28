@@ -5,6 +5,7 @@ Handles Header sheet table detection and column identification using keyword rec
 
 from typing import Optional, Dict, List, Tuple
 from table_models import TableLocation
+from ..excel_utils import get_cell_value
 
 
 class HeaderTableHandler:
@@ -68,7 +69,7 @@ class HeaderTableHandler:
         for row in range(1, min(20, sheet.max_row + 1)):  # Search first 20 rows
             row_keywords = []
             for col in range(1, min(20, sheet.max_column + 1)):  # Search first 20 columns
-                cell_value = sheet.cell(row, col).value
+                cell_value = get_cell_value(sheet, row, col)
                 if cell_value is None:
                     continue
                 
@@ -90,7 +91,7 @@ class HeaderTableHandler:
         for row in range(header_row + 1, min(header_row + 50, sheet.max_row + 1)):
             # Check if this row has any non-empty cells
             for col in range(1, min(20, sheet.max_column + 1)):
-                cell_value = sheet.cell(row, col).value
+                cell_value = get_cell_value(sheet, row, col)
                 if cell_value is not None and str(cell_value).strip():
                     return row
         
@@ -104,7 +105,7 @@ class HeaderTableHandler:
             # Check if this row has any non-empty cells
             has_data = False
             for col in range(1, min(20, sheet.max_column + 1)):
-                cell_value = sheet.cell(row, col).value
+                cell_value = get_cell_value(sheet, row, col)
                 if cell_value is not None and str(cell_value).strip():
                     has_data = True
                     break
@@ -117,7 +118,7 @@ class HeaderTableHandler:
                 for check_row in range(row, min(row + 3, sheet.max_row + 1)):
                     row_empty = True
                     for col in range(1, min(20, sheet.max_column + 1)):
-                        cell_value = sheet.cell(check_row, col).value
+                        cell_value = get_cell_value(sheet, check_row, col)
                         if cell_value is not None and str(cell_value).strip():
                             row_empty = False
                             break
@@ -139,14 +140,14 @@ class HeaderTableHandler:
         
         # Find start column (first non-empty cell in header row)
         for col in range(1, min(20, sheet.max_column + 1)):
-            cell_value = sheet.cell(header_row, col).value
+            cell_value = get_cell_value(sheet, header_row, col)
             if cell_value is not None and str(cell_value).strip():
                 start_col = col
                 break
         
         # Find end column (last non-empty cell in header row)
         for col in range(sheet.max_column, 0, -1):
-            cell_value = sheet.cell(header_row, col).value
+            cell_value = get_cell_value(sheet, header_row, col)
             if cell_value is not None and str(cell_value).strip():
                 end_col = col
                 break
@@ -162,7 +163,7 @@ class HeaderTableHandler:
         
         # Search through the header row to find column indices
         for col in range(table_loc.start_col, table_loc.end_col + 1):
-            cell_value = sheet.cell(table_loc.start_row, col).value
+            cell_value = get_cell_value(sheet, table_loc.start_row, col)
             if cell_value is None:
                 continue
             
@@ -259,7 +260,7 @@ class HeaderTableHandler:
         if col is None:
             return None
         
-        cell_value = sheet.cell(row, col).value
+        cell_value = get_cell_value(sheet, row, col)
         if cell_value is None:
             return None
         
