@@ -54,7 +54,10 @@ def get_filter_price(price_calculator: PriceCalculator, filter_type: str, max_di
     filter_height = min(width_inches, height_inches)
     
     # Build size string in the format expected by get_price_for_default_table
-    size_str = f'{int(filter_width)}" x {int(filter_height)}"'
+    # Preserve decimal values if present
+    width_str = f'{int(filter_width)}"' if filter_width == int(filter_width) else f'{filter_width}"'
+    height_str = f'{int(filter_height)}"' if filter_height == int(filter_height) else f'{filter_height}"'
+    size_str = f'{width_str} x {height_str}'
     
     try:
         # Use get_price_for_default_table which handles exceeded dimensions correctly

@@ -197,7 +197,7 @@ def build_quote_item(
             warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
         
         try:
-            rounded_height = price_calculator.find_rounded_price_per_foot_width(product, int(round(height_inches)))
+            rounded_height = price_calculator.find_rounded_price_per_foot_width(product, height_inches)
         except SizeNotFoundError as e:
             return None, str(e)
         

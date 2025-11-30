@@ -1408,6 +1408,9 @@ class QuotationApp(QMainWindow):
         if self.finish_combo.currentText() == 'Special Color':
             special_color_multiplier = self.special_color_multiplier_spin.value() / 100.0  # Convert percentage to decimal
         
+        # Initialize unit_price to None to avoid UnboundLocalError
+        unit_price = None
+        
         # Get product type flags using consolidated helper
         if product:
             has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
@@ -1518,7 +1521,10 @@ class QuotationApp(QMainWindow):
             # If rounded_size is None, construct size string from actual dimensions
             # This allows exceeded dimension calculation to work
             if not rounded_size:
-                rounded_size = f'{int(width_inches)}" x {int(height_inches)}"'
+                # Preserve decimal values if present
+                width_str = f'{int(width_inches)}"' if width_inches == int(width_inches) else f'{width_inches}"'
+                height_str = f'{int(height_inches)}"' if height_inches == int(height_inches) else f'{height_inches}"'
+                rounded_size = f'{width_str} x {height_str}'
             
             # Display the rounded size
             self.rounded_size_label.setText(rounded_size)

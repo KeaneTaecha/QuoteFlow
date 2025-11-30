@@ -236,7 +236,7 @@ class PriceDatabase:
         return result[0] if result else None
     
     # Price queries
-    def get_price_for_dimensions(self, table_id: int, height: int, width: int) -> Optional[Tuple[float, float]]:
+    def get_price_for_dimensions(self, table_id: int, height: float, width: float) -> Optional[Tuple[float, float]]:
         """Get tb_price and wd_price for given dimensions
         
         Returns:
@@ -261,7 +261,7 @@ class PriceDatabase:
         wd_price = result[1] if result[1] is not None else 0
         return tb_price, wd_price
     
-    def get_price_for_diameter(self, table_id: int, diameter: int) -> Optional[Tuple[float, float]]:
+    def get_price_for_diameter(self, table_id: int, diameter: float) -> Optional[Tuple[float, float]]:
         """Get tb_price and wd_price for given diameter (other table)
         
         Returns:
@@ -286,7 +286,7 @@ class PriceDatabase:
         wd_price = result[1] if result[1] is not None else 0
         return tb_price, wd_price
     
-    def get_price_per_foot(self, table_id: int, width: int, price_id: Optional[int] = None) -> Optional[float]:
+    def get_price_per_foot(self, table_id: int, width: float, price_id: Optional[int] = None) -> Optional[float]:
         """Get price_per_foot for given table_id and width, or by price_id
         
         Always uses height column to get size since price_per_foot products store size in height.
@@ -332,7 +332,7 @@ class PriceDatabase:
         cursor.execute('SELECT * FROM prices WHERE price_id = ?', (price_id,))
         return cursor.fetchone()
     
-    def get_diameter_by_price_id(self, price_id: int) -> Optional[int]:
+    def get_diameter_by_price_id(self, price_id: int) -> Optional[float]:
         """Get diameter (height) for a price_id in other table format"""
         conn = self.get_connection()
         if not conn:
@@ -349,7 +349,7 @@ class PriceDatabase:
         return result[0] if result else None
     
     # Size lookup queries
-    def find_rounded_price_per_foot_width(self, product: str, width: int) -> Optional[int]:
+    def find_rounded_price_per_foot_width(self, product: str, width: float) -> Optional[float]:
         """Find the exact match first, then the next available width that is >= the given width for price_per_foot products
         
         Always searches in height column since price_per_foot products store size in height.
@@ -379,7 +379,7 @@ class PriceDatabase:
         result = cursor.fetchone()
         return result[0] if result else None
     
-    def find_rounded_default_table_size(self, product: str, width: int, height: int) -> Optional[str]:
+    def find_rounded_default_table_size(self, product: str, width: float, height: float) -> Optional[str]:
         """Find the exact match first, then the next available size that is >= the given width and height"""
         conn = self.get_connection()
         if not conn:
@@ -404,11 +404,17 @@ class PriceDatabase:
         result = cursor.fetchone()
         if result:
             # Return format: width x height (height after width)
-            return f'{result[1]}" x {result[0]}"'
+            # Preserve decimal values if present
+            width_val = result[1]
+            height_val = result[0]
+            # Format as integer if whole number, otherwise preserve decimals
+            width_str = f'{int(width_val)}"' if width_val == int(width_val) else f'{width_val}"'
+            height_str = f'{int(height_val)}"' if height_val == int(height_val) else f'{height_val}"'
+            return f'{width_str} x {height_str}'
         
         return None
     
-    def find_rounded_other_table_size(self, product: str, diameter: int, price_id: Optional[int] = None) -> Optional[str]:
+    def find_rounded_other_table_size(self, product: str, diameter: float, price_id: Optional[int] = None) -> Optional[str]:
         """Find the exact match first, then the next available diameter that is >= the given diameter for other table products
         
         Args:
@@ -429,7 +435,9 @@ class PriceDatabase:
         if price_id is not None:
             diameter_result = self.get_diameter_by_price_id(price_id)
             if diameter_result:
-                return f'{diameter_result}" diameter'
+                # Format as integer if whole number, otherwise preserve decimals
+                diameter_str = f'{int(diameter_result)}"' if diameter_result == int(diameter_result) else f'{diameter_result}"'
+                return f'{diameter_str} diameter'
             return None
         
         # Single query: prioritize exact match, then closest >= match
@@ -448,7 +456,10 @@ class PriceDatabase:
         
         result = cursor.fetchone()
         if result:
-            return f'{result[0]}" diameter'
+            diameter_val = result[0]
+            # Format as integer if whole number, otherwise preserve decimals
+            diameter_str = f'{int(diameter_val)}"' if diameter_val == int(diameter_val) else f'{diameter_val}"'
+            return f'{diameter_str} diameter'
         
         return None
     
@@ -554,7 +565,7 @@ class PriceDatabase:
         # No dimensions exceeded
         return None
     
-    def get_max_dimensions(self, table_id: int) -> Optional[Tuple[int, int]]:
+    def get_max_dimensions(self, table_id: int) -> Optional[Tuple[float, float]]:
         """Get maximum height and width for a table_id"""
         conn = self.get_connection()
         if not conn:
@@ -572,7 +583,7 @@ class PriceDatabase:
             return None
         return (result[0], result[1])
     
-    def find_closest_price_for_dimensions(self, table_id: int, height: int, width: int) -> Optional[Tuple[int, int, float, float]]:
+    def find_closest_price_for_dimensions(self, table_id: int, height: float, width: float) -> Optional[Tuple[float, float, float, float]]:
         """Find closest available dimensions and prices
         
         Returns:

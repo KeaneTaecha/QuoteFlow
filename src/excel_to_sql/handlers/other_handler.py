@@ -25,7 +25,7 @@ class OtherTableHandler:
         return False
     
     def _get_width_value(self, cell_value, model_names=None):
-        """Get width value - returns integer for inch values, or None for model names"""
+        """Get width value - returns float for inch values (supports decimals like 7.2), or None for model names"""
         inch_value = self.is_inch_value(cell_value)
         if inch_value is not None:
             return inch_value
@@ -120,7 +120,8 @@ class OtherTableHandler:
             "price per ft",
             "price/ft",
             "price per foot",
-            "price/foot"
+            "price/foot",
+            "price /  ft."
         ]
         return any(pattern in cell_str for pattern in price_per_feet_patterns)
 

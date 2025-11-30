@@ -24,6 +24,11 @@ class SizeNotFoundError(Exception):
     pass
 
 
+class ModifierError(Exception):
+    """Raised when there's an error applying a modifier"""
+    pass
+
+
 class PriceCalculator:
     """Calculates prices using data from SQLite database"""
     
@@ -78,7 +83,7 @@ class PriceCalculator:
         return hand_gear_addition
     
 
-    def _apply_modifier(self, modifier, base_value, variables, default_value=None):
+    def _apply_modifier(self, modifier, base_value, variables):
         """
         Apply a modifier (equation or multiplier) to a base value.
         
@@ -86,16 +91,12 @@ class PriceCalculator:
             modifier: Modifier value (can be equation string, number, or None)
             base_value: Base value to apply modifier to
             variables: Variables dictionary for equation evaluation
-            default_value: Default value if modifier is None (defaults to base_value)
             
         Returns:
             Modified value
         """
-        if default_value is None:
-            default_value = base_value
-        
         if modifier is None:
-            return default_value
+            return base_value
         
         try:
             if self._is_equation(modifier):
@@ -103,49 +104,28 @@ class PriceCalculator:
             elif self._is_number(modifier):
                 return base_value * float(modifier)
             else:
-                return default_value
+                return base_value
         except Exception as e:
-            print(f"⚠ Warning: Error applying modifier: {e}")
-            return default_value
+            raise ModifierError(f"Error applying modifier '{modifier}': {e}") from e
     
     def _apply_base_modifier(self, base_modifier, variables):
         """Apply Base modifier to calculate base price (BP)"""
         tb_price = variables.get('TB', 0)
-        return self._apply_modifier(base_modifier, tb_price, variables, tb_price)
+        return self._apply_modifier(base_modifier, tb_price, variables)
     
     def _apply_wd_modifier(self, wd_modifier, variables):
         """Apply WD modifier to calculate modified WD price (MWD)"""
         wd_price = variables.get('WD', 0)
-        return self._apply_modifier(wd_modifier, wd_price, variables, wd_price)
+        return self._apply_modifier(wd_modifier, wd_price, variables)
 
-    def _apply_finish_pricing(self, finish_multiplier, variables, with_damper=False):
+    def _apply_finish_pricing(self, finish_multiplier, variables, with_damper=False, finish=None):
         """Apply finish multiplier to base price (BP or MWD) and return final price"""
-        
-        # Determine the base price to use
         if with_damper:
-            base_price = variables['MWD']  # Use modified WD price for with-damper
+            base_price = variables.get('MWD', 0)  # Use modified WD price for with-damper
         else:
-            base_price = variables['BP']   # Use base price for without-damper
+            base_price = variables.get('BP', 0)   # Use base price for without-damper
         
-        # Apply finish multiplier if available
-        if finish_multiplier is not None:
-            if self._is_equation(finish_multiplier):
-                try:
-                    # Update variables with current base_price for equation evaluation
-                    equation_variables = variables.copy()
-                    equation_variables['BP'] = base_price
-                    equation_variables['MWD'] = base_price
-                    final_price = self.equation_parser.parse_equation(str(finish_multiplier), equation_variables)
-                    return int(final_price + 0.5)
-                except Exception as e:
-                    print(f"⚠ Warning: Error evaluating finish equation '{finish_multiplier}': {e}")
-                    return int(base_price + 0.5)
-            elif self._is_number(finish_multiplier):
-                final_price = base_price * float(finish_multiplier)
-                return int(final_price + 0.5)
-        
-        # No finish multiplier, return base price
-        return int(base_price + 0.5)
+        return self._apply_modifier(finish_multiplier, base_price, variables)
     
     def _load_product_data(self, product):
         """
@@ -212,8 +192,11 @@ class PriceCalculator:
             'BP': bp_price
         }
         
-        # Apply WD modifier to calculate modified WD price (MWD)
-        modified_wd_price = self._apply_wd_modifier(wd_modifier, wd_variables)
+        # Apply WD modifier to calculate modified WD price (MWD) only when with_damper is True
+        if with_damper:
+            modified_wd_price = self._apply_wd_modifier(wd_modifier, wd_variables)
+        else:
+            modified_wd_price = 0
         
         # Determine which multiplier/equation to use based on finish and damper option
         finish_multiplier = None
@@ -379,8 +362,7 @@ class PriceCalculator:
         Raises:
             SizeNotFoundError: If rounded width not found
         """
-        width_int = int(width)
-        rounded_width = self.db.find_rounded_price_per_foot_width(product, width_int)
+        rounded_width = self.db.find_rounded_price_per_foot_width(product, width)
         if rounded_width is None:
             raise SizeNotFoundError(f'Height {width}" not available in price list for {product}. Please check available heights in the database.')
         return rounded_width
@@ -400,13 +382,13 @@ class PriceCalculator:
         if not size:
             raise ValueError(f'Size cannot be None or empty')
         
-        # Parse size to get width and height
+        # Parse size to get width and height (supports decimal values)
         size_match = re.search(r'(\d+(?:\.\d+)?)"?\s*x\s*(\d+(?:\.\d+)?)"?', str(size).lower())
         if not size_match:
             raise ValueError(f'Invalid size format: {size}')
         
-        width = int(float(size_match.group(1)))
-        height = int(float(size_match.group(2)))
+        width = float(size_match.group(1))
+        height = float(size_match.group(2))
         
         # Load product data
         table_id, base_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier = self._load_product_data(product)
@@ -472,12 +454,12 @@ class PriceCalculator:
             ProductNotFoundError: If product data not found
             PriceNotFoundError: If price not found
         """
-        # Parse diameter value if it's a string (e.g., "8\" diameter" -> 8)
+        # Parse diameter value if it's a string (e.g., "8\" diameter" -> 8.0, "7.2\" diameter" -> 7.2)
         if isinstance(diameter, str):
             diameter_match = re.search(r'(\d+(?:\.\d+)?)', diameter)
             if not diameter_match:
                 raise ValueError(f'Invalid diameter format: {diameter}')
-            diameter = int(float(diameter_match.group(1)))
+            diameter = float(diameter_match.group(1))
         
         # Load product data
         table_id, base_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier = self._load_product_data(product)
@@ -512,8 +494,15 @@ class PriceCalculator:
         Raises:
             SizeNotFoundError: If rounded size not found
         """
-        diameter_int = int(diameter) if not isinstance(diameter, str) else int(float(re.search(r'(\d+(?:\.\d+)?)', diameter).group(1)))
-        rounded_size = self.db.find_rounded_other_table_size(product, diameter_int, price_id)
+        # Convert diameter to float (supports decimal values)
+        if isinstance(diameter, str):
+            diameter_match = re.search(r'(\d+(?:\.\d+)?)', diameter)
+            if not diameter_match:
+                raise SizeNotFoundError(f'Invalid diameter format: {diameter}')
+            diameter_float = float(diameter_match.group(1))
+        else:
+            diameter_float = float(diameter)
+        rounded_size = self.db.find_rounded_other_table_size(product, diameter_float, price_id)
         if not rounded_size:
             raise SizeNotFoundError(f'Size not available for {product}')
         return rounded_size
@@ -563,9 +552,9 @@ class PriceCalculator:
         else:
             adjusted_width = width
         
-        # Convert adjusted dimensions to integers for database lookup
-        adjusted_height_inches = int(adjusted_height)
-        adjusted_width_inches = int(adjusted_width)
+        # Keep adjusted dimensions as floats for database lookup (supports decimal values)
+        adjusted_height_inches = adjusted_height
+        adjusted_width_inches = adjusted_width
         
         # Get maximum available dimensions
         max_dims = self.db.get_max_dimensions(table_id)

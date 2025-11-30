@@ -74,8 +74,8 @@ class ExcelToSQLiteConverter:
             CREATE TABLE IF NOT EXISTS prices (
                 price_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 table_id INTEGER NOT NULL,
-                height INTEGER,
-                width INTEGER,
+                height REAL,
+                width REAL,
                 normal_price REAL,
                 price_with_damper REAL,
                 price_per_foot REAL,
@@ -99,7 +99,7 @@ class ExcelToSQLiteConverter:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS row_multipliers (
                 table_id INTEGER NOT NULL,
-                width INTEGER NOT NULL,
+                width REAL NOT NULL,
                 height_exceeded_multiplier REAL,
                 height_exceeded_multiplier_wd REAL,
                 PRIMARY KEY (table_id, width),
@@ -111,7 +111,7 @@ class ExcelToSQLiteConverter:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS column_multipliers (
                 table_id INTEGER NOT NULL,
-                height INTEGER NOT NULL,
+                height REAL NOT NULL,
                 width_exceeded_multiplier REAL,
                 width_exceeded_multiplier_wd REAL,
                 PRIMARY KEY (table_id, height),
@@ -121,13 +121,13 @@ class ExcelToSQLiteConverter:
         
         self.conn.commit()
     
-    def is_inch_value(self, value) -> Optional[int]:
-        """Check if a cell value is an inch measurement (e.g., '4"', '6"')"""
+    def is_inch_value(self, value) -> Optional[float]:
+        """Check if a cell value is an inch measurement (e.g., '4"', '6"', '7.2"')"""
         if value and isinstance(value, str) and '"' in str(value):
             try:
-                # Extract inch value from string like "4"" -> 4
+                # Extract inch value from string like "4"" -> 4, "7.2"" -> 7.2
                 width_str = str(value).replace('"', '').strip()
-                return int(width_str)
+                return float(width_str)
             except ValueError:
                 return None
         return None
