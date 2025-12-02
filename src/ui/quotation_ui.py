@@ -1078,7 +1078,7 @@ class QuotationApp(QMainWindow):
                 self.finish_combo.addItem('No finishes available')
             
             # Get product type flags using consolidated helper
-            has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
+            has_no_dimensions, has_price_per_foot, has_price_per_sq_in, is_other_table = get_product_type_flags(self.price_calculator, product)
             
             if has_no_dimensions:
                 # For products with no dimensions, show only height field
@@ -1098,8 +1098,8 @@ class QuotationApp(QMainWindow):
                 else:
                     unit_text = 'inches'
                 self.height_label.setText(f'Height ({unit_text}) *')
-            elif has_price_per_foot:
-                # For price_per_foot products, show width and height fields (required)
+            elif has_price_per_foot or has_price_per_sq_in:
+                # For price_per_foot or price_per_sq_in products, show width and height fields (required)
                 self.show_hide_widgets(self.width_layout, True)
                 self.show_hide_widgets(self.height_layout, True)
                 self.show_hide_widgets(self.other_table_layout, False)
@@ -1413,9 +1413,9 @@ class QuotationApp(QMainWindow):
         
         # Get product type flags using consolidated helper
         if product:
-            has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
+            has_no_dimensions, has_price_per_foot, has_price_per_sq_in, is_other_table = get_product_type_flags(self.price_calculator, product)
         else:
-            has_no_dimensions = has_price_per_foot = is_other_table = False
+            has_no_dimensions = has_price_per_foot = has_price_per_sq_in = is_other_table = False
         
         if has_no_dimensions:
             # Handle products with no height/width - extract price_id first
@@ -1434,6 +1434,16 @@ class QuotationApp(QMainWindow):
                 unit = self.unit_combo.currentText()
                 height_inches = convert_dimension_to_inches(height, unit)
                 unit_price, _ = self.price_calculator.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id, height_unit=unit)
+                self.rounded_size_label.setText('N/A')
+            elif has_price_per_sq_in:
+                # For price_per_sq_in products with no dimensions, use get_price_for_price_per_sq_in with price_id
+                # Note: width and height are still required for price_per_sq_in calculation
+                width = self.width_spin.value()
+                height = self.height_spin.value()
+                unit = self.unit_combo.currentText()
+                width_inches = convert_dimension_to_inches(width, unit)
+                height_inches = convert_dimension_to_inches(height, unit)
+                unit_price, _ = self.price_calculator.get_price_for_price_per_sq_in(product, finish, 0, width_inches, height_inches, with_damper, special_color_multiplier, price_id=price_id, width_unit=unit, height_unit=unit)
                 self.rounded_size_label.setText('N/A')
             elif is_other_table:
                 # For other table products with no dimensions, use find_rounded_other_table_size with price_id
@@ -1474,6 +1484,31 @@ class QuotationApp(QMainWindow):
             # Note: rounded_height is passed as 'width' parameter (to match database), width_inches is passed as 'height' (dimension to multiply)
             # height_unit should be the unit of the original height dimension (which is width_inches in this case, using 'unit')
             unit_price, _ = self.price_calculator.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier, height_unit=unit)
+        elif has_price_per_sq_in:
+            # Handle price_per_sq_in products - require width and height
+            width = self.width_spin.value()
+            height = self.height_spin.value()
+            
+            # Convert to inches if needed
+            width_inches = convert_dimension_to_inches(width, unit)
+            height_inches = convert_dimension_to_inches(height, unit)
+            
+            # Find the rounded height that matches database (for other tables, size is stored in height column)
+            try:
+                rounded_height = self.price_calculator.find_rounded_price_per_sq_in_width(product, height_inches)
+            except Exception:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
+            
+            # Display the rounded width and height
+            self.rounded_size_label.setText(f'{width_inches}" x {rounded_height}"')
+            
+            # Get price using price_per_sq_in formula: (width * height) × price_per_sq_in
+            # Note: rounded_height is used to look up price_per_sq_in from database
+            # width_inches and height_inches are used to calculate area
+            unit_price, _ = self.price_calculator.get_price_for_price_per_sq_in(product, finish, rounded_height, width_inches, height_inches, with_damper, special_color_multiplier, width_unit=unit, height_unit=unit)
         elif is_other_table:
             # Handle other table products
             height = self.other_table_spin.value()
@@ -1613,7 +1648,7 @@ class QuotationApp(QMainWindow):
             # Get product type flags using consolidated helper
             # Wrap in try-except to catch database errors
             try:
-                has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
+                has_no_dimensions, has_price_per_foot, has_price_per_sq_in, is_other_table = get_product_type_flags(self.price_calculator, product)
             except Exception as e:
                 QMessageBox.critical(self, 'Error', f'Failed to get product information: {str(e)}\n\nPlease check that the product exists in the database.')
                 return
@@ -1630,15 +1665,19 @@ class QuotationApp(QMainWindow):
                 slot_number = extract_slot_number_from_model(product_input)
             
             if has_no_dimensions:
-                # For no-dimension products, height might still be needed for price_per_foot
-                if has_price_per_foot:
-                    height = self.height_spin.value()
-            elif has_price_per_foot or not is_other_table:
+                # For no-dimension products, height might still be needed for price_per_foot or price_per_sq_in
+                if has_price_per_foot or has_price_per_sq_in:
+                    if has_price_per_foot:
+                        height = self.height_spin.value()
+                    elif has_price_per_sq_in:
+                        width = self.width_spin.value()
+                        height = self.height_spin.value()
+            elif has_price_per_foot or has_price_per_sq_in or not is_other_table:
                 width = self.width_spin.value()
                 height = self.height_spin.value()
                 
                 # Validate dimensions: width should be greater than height (for default products)
-                if not has_price_per_foot and height > width:
+                if not (has_price_per_foot or has_price_per_sq_in) and height > width:
                     QMessageBox.warning(self, 'Invalid Dimensions', 
                                       'Width must be greater than height. Please adjust the dimensions.')
                     return
@@ -1657,6 +1696,7 @@ class QuotationApp(QMainWindow):
                     quantity=quantity,
                     has_wd=with_damper,
                     has_price_per_foot=has_price_per_foot,
+                    has_price_per_sq_in=has_price_per_sq_in,
                     is_other_table=is_other_table,
                     width=width,
                     height=height,

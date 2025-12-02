@@ -120,6 +120,10 @@ class PriceDatabase:
         """Check if a product has price_per_foot pricing"""
         return self.check_product_condition(product, 'pr.price_per_foot IS NOT NULL')
     
+    def has_price_per_sq_in(self, product: str) -> bool:
+        """Check if a product has price_per_sq_in pricing"""
+        return self.check_product_condition(product, 'pr.price_per_sq_in IS NOT NULL')
+    
     def has_no_dimensions(self, product: str) -> bool:
         """Check if a product has no height and width (both are NULL)"""
         return self.check_product_condition(product, 'pr.height IS NULL AND pr.width IS NULL')
@@ -286,13 +290,19 @@ class PriceDatabase:
         wd_price = result[1] if result[1] is not None else 0
         return tb_price, wd_price
     
-    def get_price_per_foot(self, table_id: int, width: float, price_id: Optional[int] = None) -> Optional[float]:
-        """Get price_per_foot for given table_id and width, or by price_id
+    def _get_price_per_unit(self, table_id: int, width: float, price_id: Optional[int], column_name: str) -> Optional[float]:
+        """Get price_per_foot or price_per_sq_in for given table_id and width, or by price_id
         
-        Always uses height column to get size since price_per_foot products store size in height.
+        Always uses height column to get size since price_per_unit products store size in height.
+        
+        Args:
+            table_id: Table ID
+            width: Width value (used to match height column)
+            price_id: Optional price_id to use directly
+            column_name: Column name ('price_per_foot' or 'price_per_sq_in')
         
         Returns:
-            price_per_foot value or None
+            price_per_unit value or None
         """
         conn = self.get_connection()
         if not conn:
@@ -301,16 +311,16 @@ class PriceDatabase:
         cursor = conn.cursor()
         
         if price_id is not None:
-            cursor.execute('''
-                SELECT price_per_foot
+            cursor.execute(f'''
+                SELECT {column_name}
                 FROM prices
-                WHERE price_id = ? AND price_per_foot IS NOT NULL
+                WHERE price_id = ? AND {column_name} IS NOT NULL
             ''', (price_id,))
         else:
-            cursor.execute('''
-                SELECT price_per_foot
+            cursor.execute(f'''
+                SELECT {column_name}
                 FROM prices
-                WHERE table_id = ? AND height = ? AND price_per_foot IS NOT NULL
+                WHERE table_id = ? AND height = ? AND {column_name} IS NOT NULL
                 ORDER BY height
                 LIMIT 1
             ''', (table_id, width))
@@ -349,10 +359,18 @@ class PriceDatabase:
         return result[0] if result else None
     
     # Size lookup queries
-    def find_rounded_price_per_foot_width(self, product: str, width: float) -> Optional[float]:
-        """Find the exact match first, then the next available width that is >= the given width for price_per_foot products
+    def _find_rounded_price_per_unit_width(self, product: str, width: float, column_name: str) -> Optional[float]:
+        """Find the exact match first, then the next available width that is >= the given width for price_per_unit products
         
-        Always searches in height column since price_per_foot products store size in height.
+        Always searches in height column since price_per_unit products store size in height.
+        
+        Args:
+            product: Product model name
+            width: Width value to search for
+            column_name: Column name ('price_per_foot' or 'price_per_sq_in')
+        
+        Returns:
+            Rounded width value or None
         """
         table_id = self.get_table_id(product)
         if table_id is None:
@@ -364,14 +382,14 @@ class PriceDatabase:
         
         cursor = conn.cursor()
         
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT height,
                    CASE 
                        WHEN height = ? THEN 0
                        ELSE height - ?
                    END as priority
             FROM prices
-            WHERE table_id = ? AND price_per_foot IS NOT NULL AND height >= ?
+            WHERE table_id = ? AND {column_name} IS NOT NULL AND height >= ?
             ORDER BY priority, height
             LIMIT 1
         ''', (width, width, table_id, width))

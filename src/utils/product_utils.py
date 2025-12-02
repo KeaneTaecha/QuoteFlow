@@ -245,9 +245,9 @@ def validate_filter_exists(filter_type: str, price_calculator: PriceCalculator) 
     return False
 
 
-def get_product_type_flags(price_calculator: PriceCalculator, product: str) -> Tuple[bool, bool, bool]:
+def get_product_type_flags(price_calculator: PriceCalculator, product: str) -> Tuple[bool, bool, bool, bool]:
     """
-    Get product type flags (has_no_dimensions, has_price_per_foot, is_other_table).
+    Get product type flags (has_no_dimensions, has_price_per_foot, has_price_per_sq_in, is_other_table).
     Consolidates the logic for determining product type characteristics.
     
     Args:
@@ -255,20 +255,21 @@ def get_product_type_flags(price_calculator: PriceCalculator, product: str) -> T
         product: Product model name
         
     Returns:
-        Tuple of (has_no_dimensions, has_price_per_foot, is_other_table)
+        Tuple of (has_no_dimensions, has_price_per_foot, has_price_per_sq_in, is_other_table)
     """
     has_no_dimensions = price_calculator.has_no_dimensions(product)
     has_price_per_foot = price_calculator.has_price_per_foot(product)
+    has_price_per_sq_in = price_calculator.has_price_per_sq_in(product)
     
     # Determine is_other_table based on product characteristics
     # If has_no_dimensions is true, is_other_table must be false (no height = no diameter)
     if has_no_dimensions:
         is_other_table = False
     else:
-        # Only check if it's NOT a price_per_foot product
-        is_other_table = price_calculator.is_other_table(product) if not has_price_per_foot else False
+        # Only check if it's NOT a price_per_foot or price_per_sq_in product
+        is_other_table = price_calculator.is_other_table(product) if not (has_price_per_foot or has_price_per_sq_in) else False
     
-    return has_no_dimensions, has_price_per_foot, is_other_table
+    return has_no_dimensions, has_price_per_foot, has_price_per_sq_in, is_other_table
 
 
 def parse_dimension_with_unit(value_str: str) -> Tuple[Optional[float], Optional[str]]:

@@ -12,6 +12,27 @@ from typing import Dict
 class EquationParser:
     """Parses and evaluates pricing equations with variable substitution"""
     
+    @staticmethod
+    def is_number(value) -> bool:
+        """Check if a value is a simple number (not an equation)"""
+        if value is None:
+            return False
+        try:
+            float(str(value).strip())
+            return True
+        except ValueError:
+            return False
+    
+    @staticmethod
+    def is_equation(value) -> bool:
+        """Check if a value is an equation (contains variables or functions)"""
+        if value is None:
+            return False
+        value_str = str(value).strip()
+        # Check if it contains equation-like patterns
+        equation_indicators = ['TB', 'WD', 'SIZE', '(', ')', '+', '-', '*', '/', 'sqrt', 'max', 'min', 'round', 'abs', 'ceil', 'floor', 'pow']
+        return any(indicator in value_str for indicator in equation_indicators)
+    
     def parse_equation(self, equation: str, variables: Dict[str, float]) -> float:
         """
         Parse and evaluate a pricing equation with variable substitution.

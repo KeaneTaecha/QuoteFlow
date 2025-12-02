@@ -79,6 +79,7 @@ class ExcelToSQLiteConverter:
                 normal_price REAL,
                 price_with_damper REAL,
                 price_per_foot REAL,
+                price_per_sq_in REAL,
                 FOREIGN KEY (table_id) REFERENCES products(table_id) ON UPDATE CASCADE,
                 UNIQUE(table_id, height, width)
             )

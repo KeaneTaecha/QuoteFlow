@@ -313,7 +313,7 @@ class ExcelItemImporter:
             return {'success': False, 'error': error_msg or f'Product "{model}" not found in database'}
         
         # Get product type flags using consolidated helper
-        has_no_dimensions, has_price_per_foot, is_other_table = get_product_type_flags(self.price_calculator, product)
+        has_no_dimensions, has_price_per_foot, has_price_per_sq_in, is_other_table = get_product_type_flags(self.price_calculator, product)
         
         # Parse width and height with unit handling
         width, width_unit = parse_dimension_with_unit(width_value)
@@ -325,10 +325,10 @@ class ExcelItemImporter:
         if height_unit is None:
             height_unit = default_unit
         
-        # For price_per_foot products, both width and height are required (unless has_no_dimensions)
-        if has_price_per_foot and not has_no_dimensions:
+        # For price_per_foot or price_per_sq_in products, both width and height are required (unless has_no_dimensions)
+        if (has_price_per_foot or has_price_per_sq_in) and not has_no_dimensions:
             if width is None or height is None:
-                return {'success': False, 'error': f'Width and height are required for price_per_foot product {product}. Please provide both dimensions in the Excel file.'}
+                return {'success': False, 'error': f'Width and height are required for price_per_foot/price_per_sq_in product {product}. Please provide both dimensions in the Excel file.'}
         
         # Allow products with no dimensions to be imported without width/height
         if width is None and height is None and not has_no_dimensions:
@@ -367,6 +367,7 @@ class ExcelItemImporter:
             quantity=quantity,
             has_wd=has_wd,
             has_price_per_foot=has_price_per_foot,
+            has_price_per_sq_in=has_price_per_sq_in,
             is_other_table=is_other_table,
             width=width,
             height=height,
@@ -403,11 +404,11 @@ class ExcelItemImporter:
         
         finish_lower = finish_str.lower()  
         # Define keywords for Powder Coated finish (used for both substring matching and exact sub-color matching)
-        powder_keywords = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์', 'สีดำ', 'พ่นดำ', 'สีอบขาว']
+        powder_keywords = ['ขาวนวล', 'ขาวด้าน', 'ขาวฟ้า', 'ขาวควันบุหรี่', 'ดำด้าน', 'ดำเงา', 'บรอนซ์', 'สีดำ', 'พ่นดำ', 'สีอบขาว', 'สีพ่นขาว']
         anodized_keywords = ['anodized', 'aluminum', 'anodized aluminum', 'anodised', 'aluminium', 'anodised aluminium', 'สีอลูมิเนียม']
         
         # Check for "No Finish" keywords first
-        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished', 'สังกะสี', 'stainless steel']
+        no_finish_keywords = ['no finish', 'nofinish', 'no_finish', 'raw', 'unfinished', 'สังกะสี', 'stainless steel', 'ไม่ทำสี']
 
         if any(keyword in finish_lower for keyword in no_finish_keywords):
             if 'No Finish' in finishes:
@@ -433,7 +434,7 @@ class ExcelItemImporter:
         
         # Default: treat as Special Color and extract multiplier
         else:
-            if 'Special Color' in finishes:
+            if 'Special Color' or 'สีพิเศษ' in finishes:
                 # Extract multiplier if present (format: "Color, Multiplier")
                 multiplier = None
                 color_name = finish_str

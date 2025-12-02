@@ -9,6 +9,7 @@ from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 from datetime import datetime
 from utils.product_utils import parse_dimension_with_unit
+from utils.equation_parser import EquationParser
 
 
 def parse_dimension(value_str, field_name):
@@ -449,13 +450,20 @@ class ExcelQuotationExporter:
                 ins_price = item.get('ins_price', 0.0)
                 filter_price = item.get('filter_price', 0.0)
                 finish_multiplier = item.get('finish_multiplier')
+                price_after_finish = item.get('price_after_finish', 0.0)
                 
                 # Use Excel formula with actual finish multiplier and rounding
                 # Formula: =ROUND(V{row} * {multiplier}, 0) which is equivalent to int(value + 0.5)
                 cell_w = self.ws[f'W{current_row}']
                 if finish_multiplier is not None:
-                    # Numeric multiplier: create Excel formula =ROUND(V{row} * {multiplier}, 0)
-                    cell_w.value = f'=ROUND(V{current_row}*{float(finish_multiplier)},0)'
+                    # Check if finish_multiplier is an equation or numeric value
+                    if EquationParser.is_equation(finish_multiplier):
+                        # Equation string: use the already-calculated price_after_finish value
+                        # The equation has already been evaluated in Python, so use the result directly
+                        cell_w.value = round(price_after_finish, 0)
+                    else:
+                        # Numeric multiplier: create Excel formula =ROUND(V{row} * {multiplier}, 0)
+                        cell_w.value = f'=ROUND(V{current_row}*{float(finish_multiplier)},0)'
                 else:
                     # No multiplier or equation: use column V directly
                     cell_w.value = f'=V{current_row}'

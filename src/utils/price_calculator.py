@@ -37,25 +37,6 @@ class PriceCalculator:
         self.db = PriceDatabase(db_path)
         self.equation_parser = EquationParser()
     
-    def _is_number(self, value):
-        """Check if a value is a simple number (not an equation)"""
-        if value is None:
-            return False
-        try:
-            float(str(value).strip())
-            return True
-        except ValueError:
-            return False
-    
-    def _is_equation(self, value):
-        """Check if a value is an equation (contains variables or functions)"""
-        if value is None:
-            return False
-        value_str = str(value).strip()
-        # Check if it contains equation-like patterns
-        equation_indicators = ['TB', 'WD', 'SIZE', '(', ')', '+', '-', '*', '/', 'sqrt', 'max', 'min', 'round', 'abs', 'ceil', 'floor', 'pow']
-        return any(indicator in value_str for indicator in equation_indicators)
-    
     def get_hand_gear_price(self, product, width, height):
         """
         Get hand gear price for VD, VD-G, and VD-M products.
@@ -99,9 +80,9 @@ class PriceCalculator:
             return base_value
         
         try:
-            if self._is_equation(modifier):
+            if self.equation_parser.is_equation(modifier):
                 return self.equation_parser.parse_equation(str(modifier), variables)
-            elif self._is_number(modifier):
+            elif self.equation_parser.is_number(modifier):
                 return base_value * float(modifier)
             else:
                 return base_value
@@ -255,6 +236,10 @@ class PriceCalculator:
         """Check if a product has price_per_foot pricing"""
         return self.db.has_price_per_foot(product)
     
+    def has_price_per_sq_in(self, product):
+        """Check if a product has price_per_sq_in pricing"""
+        return self.db.has_price_per_sq_in(product)
+    
     def has_no_dimensions(self, product):
         """Check if a product has no height and width (both are NULL)"""
         return self.db.has_no_dimensions(product)
@@ -307,9 +292,9 @@ class PriceCalculator:
         # Get price_per_foot
         # Note: 'width' parameter is actually the size value stored in SQL height column
         if price_id is not None:
-            price_per_foot = self.db.get_price_per_foot(table_id, 0, price_id)
+            price_per_foot = self.db._get_price_per_unit(table_id, 0, price_id, 'price_per_foot')
         else:
-            price_per_foot = self.db.get_price_per_foot(table_id, width)
+            price_per_foot = self.db._get_price_per_unit(table_id, width, None, 'price_per_foot')
         
         if price_per_foot is None:
             raise PriceNotFoundError(f'Price per foot not found for product {product}')
@@ -353,6 +338,61 @@ class PriceCalculator:
         )
         return final_price, finish_multiplier
     
+    def get_price_for_price_per_sq_in(self, product, finish, db_size, actual_width, actual_height, with_damper=False, special_color_multiplier=None, price_id=None, width_unit='inches', height_unit='inches'):
+        """Get price for a product with price_per_sq_in pricing
+        
+        Formula: (actual_width * actual_height) × price_per_sq_in (matching db_size first)
+        Both actual_width and actual_height are in inches.
+        
+        Args:
+            product: Product model name
+            finish: Finish type
+            db_size: Size value stored in SQL height column (used to look up price_per_sq_in) - not used if price_id is provided
+            actual_width: Actual width in inches (for area calculation)
+            actual_height: Actual height in inches (for area calculation)
+            with_damper: Whether product has damper option
+            special_color_multiplier: Multiplier for special color finish
+            price_id: Optional price_id to use directly (for has_no_dimensions case)
+            width_unit: Unit of the original width dimension ('mm', 'cm', 'm', 'inches', etc.) - not used currently
+            height_unit: Unit of the original height dimension ('mm', 'cm', 'm', 'inches', etc.) - not used currently
+            
+        Returns:
+            Tuple of (calculated price, finish_multiplier)
+            
+        Raises:
+            ProductNotFoundError: If product data not found
+            PriceNotFoundError: If price_per_sq_in not found
+        """
+        # Load product data
+        table_id, base_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier = self._load_product_data(product)
+        
+        # Get price_per_sq_in
+        # Note: 'db_size' parameter is the size value stored in SQL height column
+        if price_id is not None:
+            price_per_sq_in = self.db._get_price_per_unit(table_id, 0, price_id, 'price_per_sq_in')
+        else:
+            price_per_sq_in = self.db._get_price_per_unit(table_id, db_size, None, 'price_per_sq_in')
+        
+        if price_per_sq_in is None:
+            raise PriceNotFoundError(f'Price per sq.in. not found for product {product}')
+        
+        # Calculate area in square inches: actual_width * actual_height
+        # Both actual_width and actual_height are already in inches
+        area_sq_in = actual_width * actual_height
+        
+        # Calculate base price: area_sq_in * price_per_sq_in
+        # For price_per_sq_in, we use the calculated base_price as both TB and WD
+        tb_price = area_sq_in * price_per_sq_in
+        wd_price = tb_price  # Price per sq.in. products use the same base for both
+        
+        # Use shared helper function to calculate final price
+        final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
+            tb_price, wd_price, base_modifier, anodized_multiplier,
+            powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
+            special_color_multiplier
+        )
+        return final_price, finish_multiplier
+    
     def find_rounded_price_per_foot_width(self, product, width):
         """Find the exact match first, then the next available width that is >= the given width for price_per_foot products
         
@@ -362,7 +402,21 @@ class PriceCalculator:
         Raises:
             SizeNotFoundError: If rounded width not found
         """
-        rounded_width = self.db.find_rounded_price_per_foot_width(product, width)
+        rounded_width = self.db._find_rounded_price_per_unit_width(product, width, 'price_per_foot')
+        if rounded_width is None:
+            raise SizeNotFoundError(f'Height {width}" not available in price list for {product}. Please check available heights in the database.')
+        return rounded_width
+    
+    def find_rounded_price_per_sq_in_width(self, product, width):
+        """Find the exact match first, then the next available width that is >= the given width for price_per_sq_in products
+        
+        Returns:
+            Rounded width
+            
+        Raises:
+            SizeNotFoundError: If rounded width not found
+        """
+        rounded_width = self.db._find_rounded_price_per_unit_width(product, width, 'price_per_sq_in')
         if rounded_width is None:
             raise SizeNotFoundError(f'Height {width}" not available in price list for {product}. Please check available heights in the database.')
         return rounded_width

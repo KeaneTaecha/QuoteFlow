@@ -16,7 +16,7 @@ def calculate_ins_price(width_inches: float, height_inches: float) -> float:
 
 
 def _build_original_size(width, height, width_unit, height_unit, 
-                         slot_number, rounded_size, has_price_per_foot, is_other_table, has_no_dimensions):
+                         slot_number, rounded_size, has_price_per_foot, has_price_per_sq_in, is_other_table, has_no_dimensions):
     """Build original size string from dimensions, preserving original units."""
     def format_dimension(value, unit):
         """Format a dimension value with its unit symbol."""
@@ -36,7 +36,7 @@ def _build_original_size(width, height, width_unit, height_unit,
             return f'{value}"'
     
     if has_no_dimensions:
-        if has_price_per_foot and height is not None:
+        if (has_price_per_foot or has_price_per_sq_in) and height is not None:
             height_str = format_dimension(height, height_unit)
             return f"{slot_number}Slot x {height_str}" if slot_number else f"Slot x {height_str}"
         elif rounded_size:
@@ -91,6 +91,7 @@ def build_quote_item(
     quantity: int,
     has_wd: bool,
     has_price_per_foot: bool,
+    has_price_per_sq_in: bool,
     is_other_table: bool,
     width: Optional[float] = None,
     height: Optional[float] = None,
@@ -115,6 +116,7 @@ def build_quote_item(
         quantity: Quantity
         has_wd: Whether product has WD (damper) option
         has_price_per_foot: Whether product uses price_per_foot pricing
+        has_price_per_sq_in: Whether product uses price_per_sq_in pricing
         is_other_table: Whether product uses other_table (diameter-based) pricing
         width: Width dimension (for price_per_foot or default products)
         height: Height dimension (for price_per_foot, default products, or other_table products as diameter)
@@ -220,6 +222,48 @@ def build_quote_item(
         filter_price, ins_price = 0.0, 0.0
         
         rounded_size = f'{width_inches}" x {rounded_height}"'
+    
+    # Handle price_per_sq_in products
+    elif has_price_per_sq_in:
+        if width is None or height is None:
+            return None, f'Width and height required for price_per_sq_in product {product}'
+        
+        try:
+            width_inches = convert_dimension_to_inches(width, width_unit)
+            height_inches = convert_dimension_to_inches(height, height_unit)
+        except ValueError as e:
+            return None, str(e)
+        
+        if height_inches > width_inches:
+            width_inches, height_inches = height_inches, width_inches
+            warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
+        
+        try:
+            rounded_height = price_calculator.find_rounded_price_per_sq_in_width(product, height_inches)
+        except SizeNotFoundError as e:
+            return None, str(e)
+        
+        try:
+            # rounded_height is used to look up price_per_sq_in from database
+            # width_inches and height_inches are used to calculate area
+            table_price, _ = price_calculator.get_price_for_price_per_sq_in(product, None, rounded_height, width_inches, height_inches, has_wd, 1.0, width_unit=width_unit, height_unit=height_unit)
+        except (ProductNotFoundError, PriceNotFoundError) as e:
+            return None, str(e)
+        
+        try:
+            # rounded_height is used to look up price_per_sq_in from database
+            # width_inches and height_inches are used to calculate area
+            price_after_finish, finish_multiplier = price_calculator.get_price_for_price_per_sq_in(
+                product, finish, rounded_height, width_inches, height_inches, has_wd, special_color_multiplier, width_unit=width_unit, height_unit=height_unit
+            )
+        except (ProductNotFoundError, PriceNotFoundError) as e:
+            return None, str(e)
+        
+        # INS and filter calculations only apply to default table products
+        # Skip for has_price_per_sq_in products
+        filter_price, ins_price = 0.0, 0.0
+        
+        rounded_size = f'{width_inches}" x {rounded_height}"'
         
     # Handle other_table products
     elif is_other_table:
@@ -301,7 +345,7 @@ def build_quote_item(
     
     # Build original size
     original_size = _build_original_size(width, height, width_unit, height_unit, 
-                                          slot_number, rounded_size, has_price_per_foot, is_other_table, has_no_dimensions)
+                                          slot_number, rounded_size, has_price_per_foot, has_price_per_sq_in, is_other_table, has_no_dimensions)
     
     # Calculate final prices
     # Note: finish_multiplier is already obtained from the price calculation above

@@ -124,6 +124,27 @@ class OtherTableHandler:
             "price /  ft."
         ]
         return any(pattern in cell_str for pattern in price_per_feet_patterns)
+    
+    def _is_price_per_sq_in_column(self, cell_value):
+        """Check if column header is 'Price / Sq.in.' or similar variations"""
+        if cell_value is None:
+            return False
+        
+        cell_str = str(cell_value).lower().strip()
+        # Check for variations like "Price / Sq.in.", "Price/Sq.in.", "Price per Sq.in.", etc.
+        price_per_sq_in_patterns = [
+            "price / sq.in",
+            "price/sq.in",
+            "price per sq.in",
+            "price/sq in",
+            "price / sq in",
+            "price per sq in",
+            "price per square inch",
+            "price/square inch",
+            "price / square inch",
+            "price /  sq.in."
+        ]
+        return any(pattern in cell_str for pattern in price_per_sq_in_patterns)
 
     def extract_other_table_prices(self, sheet, table_loc: TableLocation, table_id: int, conn, model_names=None) -> int:
         """Extract prices from other-type table structure"""
@@ -145,18 +166,23 @@ class OtherTableHandler:
         
         # First pass: identify price columns
         price_per_foot_col = None
+        price_per_sq_in_col = None
         valid_price_cols = []
         
         for col in range(table_loc.height_col, table_loc.end_col + 1):
             column_header = get_cell_value(sheet, table_loc.start_row, col)
             
             if self._is_price_per_feet_column(column_header):
+                print(f"Price per foot column found: {column_header}")
                 price_per_foot_col = col
+            elif self._is_price_per_sq_in_column(column_header):
+                print(f"Price per sq.in. column found: {column_header}")
+                price_per_sq_in_col = col
             elif self._is_valid_price_column(column_header):
                 valid_price_cols.append(col)
         
         # If no price columns found, return early
-        if price_per_foot_col is None and not valid_price_cols:
+        if price_per_foot_col is None and price_per_sq_in_col is None and not valid_price_cols:
             return 0
         
         # Second pass: collect prices for each height
@@ -172,6 +198,7 @@ class OtherTableHandler:
             normal_price = None
             damper_price = None
             price_per_foot = None
+            price_per_sq_in = None
             
             try:
                 # Get price per foot from price_per_foot_col if it exists
@@ -179,6 +206,12 @@ class OtherTableHandler:
                     cell_value = get_cell_value(sheet, row, price_per_foot_col)
                     if cell_value and isinstance(cell_value, (int, float)):
                         price_per_foot = float(cell_value)
+                
+                # Get price per sq.in. from price_per_sq_in_col if it exists
+                if price_per_sq_in_col is not None:
+                    cell_value = get_cell_value(sheet, row, price_per_sq_in_col)
+                    if cell_value and isinstance(cell_value, (int, float)):
+                        price_per_sq_in = float(cell_value)
                 
                 # Get normal price and damper price from valid price columns
                 # Use the first valid price column found
@@ -198,12 +231,12 @@ class OtherTableHandler:
                             damper_price = float(damper_price_cell)
                 
                 # Insert if at least one price exists
-                if normal_price is not None or damper_price is not None or price_per_foot is not None:
+                if normal_price is not None or damper_price is not None or price_per_foot is not None or price_per_sq_in is not None:
                     cursor.execute('''
                         INSERT OR REPLACE INTO prices 
-                        (table_id, height, width, normal_price, price_with_damper, price_per_foot)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (table_id, height, None, normal_price, damper_price, price_per_foot))
+                        (table_id, height, width, normal_price, price_with_damper, price_per_foot, price_per_sq_in)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (table_id, height, None, normal_price, damper_price, price_per_foot, price_per_sq_in))
                     price_count += 1
             except Exception:
                 continue
