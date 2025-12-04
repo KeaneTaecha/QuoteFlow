@@ -49,9 +49,13 @@ class PriceCalculator:
         Returns:
             Hand gear price amount (0 if product doesn't use hand gear)
         """
-        if product == 'VD-G' or product == 'RVD-G':
+        if product == 'RVD-G':
+            return 600
+        elif product == 'RVD-M':
+            return 7000
+        elif product == 'VD-G':
             hand_gear_price = 600
-        elif product == 'VD-M' or product == 'RVD-M':
+        elif product == 'VD-M' or product == 'VD-M on/off 24V':
             hand_gear_price = 7000
         else:
             return 0
@@ -448,7 +452,7 @@ class PriceCalculator:
         table_id, base_modifier, anodized_multiplier, powder_coated_multiplier, no_finish_multiplier, wd_modifier = self._load_product_data(product)
         
         # Special case for Model VD, VD-G and VD-M: Check for oversized dimensions first
-        if product in ['VD', 'VD-G', 'VD-M']:
+        if product in ['VD', 'VD-G', 'VD-M', 'GVD', 'RVD', 'RVD-G', 'RVD-M', 'VD-M on/off 24V']:
             # Check for VD oversized dimensions using inch values directly
             vd_result = self._calculate_vd_oversized_price(table_id, width, height, with_damper, product)
             if vd_result is not None:
