@@ -1580,12 +1580,14 @@ class QuotationApp(QMainWindow):
             self.rounded_size_label.setText('N/A')
             return
         
-        discount_amount = unit_price * (discount / 100)
-        discounted_unit_price = unit_price - discount_amount
+        # Round unit price to nearest baht (avoid banker's rounding) before discount
+        rounded_unit_price = int(unit_price + 0.5)
+        discount_amount = rounded_unit_price * (discount / 100)
+        discounted_unit_price = rounded_unit_price - discount_amount
         total_price = discounted_unit_price * quantity
         
         # Display the original unit price (without discount)
-        self.unit_price_label.setText(f'฿ {unit_price:,.2f}')
+        self.unit_price_label.setText(f'฿ {rounded_unit_price:,.2f}')
         # Display the total price (with discount applied)
         if discount > 0:
             self.total_price_label.setText(f'฿ {total_price:,.2f} (Discounted)')

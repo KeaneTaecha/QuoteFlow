@@ -349,7 +349,8 @@ def build_quote_item(
     
     # Calculate final prices
     # Note: finish_multiplier is already obtained from the price calculation above
-    unit_price = price_after_finish + filter_price + ins_price
+    # Round unit price to the nearest baht using int to avoid banker's rounding
+    unit_price = int((price_after_finish + filter_price + ins_price) + 0.5)
     discount_decimal = discount / 100.0
     discounted_unit_price = unit_price * (1 - discount_decimal)
     

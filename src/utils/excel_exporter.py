@@ -415,17 +415,19 @@ class ExcelQuotationExporter:
                 
                 # UNIT PRICE in column M - links to AE column (รวมทั้งหมด)
                 cell_m = self.ws[f'M{current_row}']
-                cell_m.value = f'=AE{current_row}'
+                # Round to whole number for display (no decimals)
+                cell_m.value = f'=ROUND(AE{current_row},0)'
                 cell_m.font = normal_font
                 cell_m.alignment = right_alignment
-                cell_m.number_format = '0.00'  # Format to 2 decimal places
+                cell_m.number_format = '0'  # Whole numbers only
                 
                 # AMOUNT in column Q - ราคาต่อหน่วย x จำนวน (M * K)
                 cell_q = self.ws[f'Q{current_row}']
-                cell_q.value = f'=M{current_row}*K{current_row}'
+                # Round to nearest whole number to avoid trailing decimals
+                cell_q.value = f'=ROUND(M{current_row}*K{current_row},0)'
                 cell_q.font = normal_font
                 cell_q.alignment = right_alignment
-                cell_q.number_format = '0.00'  # Format to 2 decimal places
+                cell_q.number_format = '0'  # Whole numbers only
                 
                 # Calculate item_total for footer (using AE value, but we'll calculate it after AE is set)
                 # We'll need to recalculate this after AE column is populated
@@ -452,18 +454,17 @@ class ExcelQuotationExporter:
                 finish_multiplier = item.get('finish_multiplier')
                 price_after_finish = item.get('price_after_finish', 0.0)
                 
-                # Use Excel formula with actual finish multiplier and rounding
-                # Formula: =ROUND(V{row} * {multiplier}, 0) which is equivalent to int(value + 0.5)
+                # Use Excel formula with actual finish multiplier (no rounding)
+                # Formula: =V{row} * {multiplier}
                 cell_w = self.ws[f'W{current_row}']
                 if finish_multiplier is not None:
                     # Check if finish_multiplier is an equation or numeric value
                     if EquationParser.is_equation(finish_multiplier):
-                        # Equation string: use the already-calculated price_after_finish value
-                        # The equation has already been evaluated in Python, so use the result directly
-                        cell_w.value = round(price_after_finish, 0)
+                        # Equation string: use the already-calculated price_after_finish value as-is
+                        cell_w.value = price_after_finish
                     else:
-                        # Numeric multiplier: create Excel formula =ROUND(V{row} * {multiplier}, 0)
-                        cell_w.value = f'=ROUND(V{current_row}*{float(finish_multiplier)},0)'
+                        # Numeric multiplier: create Excel formula =V{row} * {multiplier}
+                        cell_w.value = f'=V{current_row}*{float(finish_multiplier)}'
                 else:
                     # No multiplier or equation: use column V directly
                     cell_w.value = f'=V{current_row}'
@@ -471,6 +472,21 @@ class ExcelQuotationExporter:
                 cell_w.font = normal_font
                 cell_w.alignment = right_alignment
                 cell_w.number_format = '0.00'  # Format to 2 decimal places
+                
+                # Highlight พ่นสี/อลู column based on multiplier
+                finish_fill = None
+                if finish_multiplier is not None and not EquationParser.is_equation(finish_multiplier):
+                    try:
+                        multiplier_value = float(finish_multiplier)
+                        if abs(multiplier_value - 1.55) < 1e-9 or abs(multiplier_value - 1.35) < 1e-9:
+                            finish_fill = PatternFill(fill_type='solid', start_color='FFFF00', end_color='FFFF00')
+                        elif abs(multiplier_value - 1.25) < 1e-9:
+                            finish_fill = PatternFill(fill_type='solid', start_color='D9D9D9', end_color='D9D9D9')
+                    except (TypeError, ValueError):
+                        pass
+                
+                if finish_fill:
+                    cell_w.fill = finish_fill
                 
                 # Column X: INS price
                 cell_x = self.ws[f'X{current_row}']
@@ -555,12 +571,14 @@ class ExcelQuotationExporter:
         cell_subtotal.value = f'=SUM(Q{first_item_row}:Q{last_item_row})'
         cell_subtotal.font = bold_font
         cell_subtotal.alignment = right_alignment
+        cell_subtotal.number_format = '0.00'
         
         # VAT - 7% of subtotal
         cell_vat = self.ws[f'Q{footer_start_row + 1}']
         cell_vat.value = f'=Q{footer_start_row}*0.07'
         cell_vat.font = bold_font
         cell_vat.alignment = right_alignment
+        cell_vat.number_format = '0.00'
         
         # Grand total - subtotal + VAT
         grand_total = sub_total + (sub_total * 0.07)  # For Thai baht text calculation
@@ -569,6 +587,7 @@ class ExcelQuotationExporter:
         cell_grand_total.value = f'=Q{footer_start_row}+Q{footer_start_row + 1}'
         cell_grand_total.font = Font(name='Angsana New', size=14, bold=True)
         cell_grand_total.alignment = right_alignment
+        cell_grand_total.number_format = '0.00'
         
         # Footer information - populate template fields
         footer_row = footer_start_row + 4
