@@ -261,33 +261,7 @@ Main UI is in `src/ui/quotation_ui.py`:
 - Modify layouts and styling as needed
 - Font scaling system for accessibility
 
-## Contributing
 
-When contributing to this project:
-1. Test with multiple Excel formats
-2. Verify price calculations match expected results
-3. Update documentation for any format changes
-4. Include sample Excel files with pull requests
-
-## Support
-
-For issues or questions:
-1. Check documentation in `docs/` folder
-2. Review troubleshooting section above
-3. Verify Excel formats match specifications
-4. Check database generation completed successfully
-
-## License
-
-[Specify your license here]
-
-## Version History
-
-- **v1.0**: Initial release with core functionality
-- Multi-table Excel import
-- Automated price calculation
-- Excel export with formatting
-- Filter and damper support
 
 ---
 

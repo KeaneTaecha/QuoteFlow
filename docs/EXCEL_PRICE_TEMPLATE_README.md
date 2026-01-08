@@ -38,13 +38,11 @@ The converter uses keyword recognition to identify columns. Column names are cas
 
 #### Example Header Sheet Format
 
-```
 | Sheet Name | Model    | TB Modifier | Anodized | Powder Coated | No Finish | WD      |
 |-----------|---------|-------------|----------|---------------|-----------|---------|
 | Sheet1    | AA-100  | 1.0         | 1.0      | 1.15          | 0.85      | 1.2     |
 | Sheet1    | AA-200  | w*h/144     | 1.0      | 1.20          | 0.80      |         |
 | Sheet2    | BB-100  | (w+h)/2     | 1.05     | 1.15          | 0.85      | 1.25    |
-```
 
 #### Column Details
 
@@ -324,12 +322,11 @@ The converter performs automatic validation:
 Here's a minimal complete example:
 
 **Sheet: "Header"**
-```
+
 | Sheet Name | Model   | TB Modifier | Anodized | Powder Coated | No Finish |
 |-----------|---------|-------------|----------|---------------|-----------|
 | Products  | AA-100  | 1.0         | 1.0      | 1.15          | 0.85      |
 | Products  | AA-200  | w*h/144     | 1.0      | 1.20          | 0.80      |
-```
 
 **Sheet: "Products"**
 ```

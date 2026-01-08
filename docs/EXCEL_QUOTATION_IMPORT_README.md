@@ -56,19 +56,16 @@ These columns enhance the import but are not required:
 
 Regular data rows with product information:
 
-```
 | Model   | Detail              | Width | Height | Unit   | Quantity | Finish        | Discount |
 |---------|---------------------|-------|--------|--------|----------|---------------|----------|
 | AA-100  | Office Window       | 24    | 36     | inches | 2        | Anodized      | 0        |
 | AA-200  | Conference Room     | 30    | 48     | inches | 4        | Powder Coated | 5        |
 | BB-100  | Entry Door          | 36    | 84     | inches | 1        | No Finish     | 0        |
-```
 
 ### 2. Title Rows (Section Headers)
 
 Rows with Model text but no other data become section titles:
 
-```
 | Model            | Detail | Width | Height | Quantity | Finish | Discount |
 |------------------|--------|-------|--------|----------|--------|----------|
 | First Floor      |        |       |        |          |        |          |
@@ -76,7 +73,6 @@ Rows with Model text but no other data become section titles:
 | AA-200           | Conf.  | 30    | 48     | 4        | Powder | 5        |
 | Second Floor     |        |       |        |          |        |          |
 | BB-100           | Entry  | 36    | 84     | 1        | None   | 0        |
-```
 
 **Title Row Detection**:
 - Model column has text (not blank)
@@ -112,13 +108,12 @@ Completely blank rows are also converted to title rows with empty text.
 **Format**: Numeric values
 **Units**: Specified in "Unit" column
 **Examples**:
-```
+
 | Width | Height | Unit       |
 |-------|--------|------------|
 | 24    | 36     | inches     |
 | 610   | 914    | millimeters|
 | 24    | 36     | mm         |
-```
 
 **Parsing**:
 - Accepts numeric values with or without unit symbols
@@ -141,14 +136,13 @@ Completely blank rows are also converted to title rows with empty text.
 
 **Format**: Numeric integer or decimal
 **Examples**:
-```
-| Quantity |
-|----------|
-| 1        |
-| 5        |
-| 10       |
-| 2.5      |  ← Decimals supported but unusual
-```
+
+| Quantity | Note |
+|----------|------|
+| 1        |      |
+| 5        |      |
+| 10       |      |
+| 2.5      | Decimals supported but unusual |
 
 **Parsing**:
 - Converts to integer if possible
@@ -165,7 +159,7 @@ Completely blank rows are also converted to title rows with empty text.
 - **Special Color**: Any other finish value will be treated as a special color with custom multiplier
 
 **Examples**:
-```
+
 | Finish          | Interpreted As         |
 |-----------------|------------------------|
 | Anodized        | Anodized Aluminum      |
@@ -176,7 +170,6 @@ Completely blank rows are also converted to title rows with empty text.
 | Raw             | No Finish               |
 | ANODIZED        | Anodized Aluminum       |
 | Special Color - Red | Special Color (with multiplier) |
-```
 
 **Behavior**:
 - Blank cells default to No Finish (multiplier = 1.0)
@@ -187,14 +180,13 @@ Completely blank rows are also converted to title rows with empty text.
 
 **Format**: Numeric percentage value
 **Examples**:
-```
-| Discount |
-|----------|
-| 0        |  ← No discount
-| 5        |  ← 5% discount
-| 10       |  ← 10% discount
-| 15.5     |  ← 15.5% discount
-```
+
+| Discount | Note |
+|----------|------|
+| 0        | No discount |
+| 5        | 5% discount |
+| 10       | 10% discount |
+| 15.5     | 15.5% discount |
 
 **Parsing**:
 - Enter as plain number (not percentage symbol)
@@ -211,30 +203,25 @@ Completely blank rows are also converted to title rows with empty text.
 
 ### Minimal Format (Model Only)
 
-```
 | Model   |
 |---------|
 | AA-100  |
 | AA-200  |
 | BB-100  |
-```
 
 Result: Items imported with default dimensions, quantities, and finishes.
 
 ### Standard Format (All Columns)
 
-```
 | Model  | Detail           | Width | Height | Unit   | Quantity | Finish        | Discount |
 |--------|------------------|-------|--------|--------|----------|---------------|----------|
 | AA-100 | Main Office      | 24    | 36     | inches | 2        | Anodized      | 0        |
 | AA-100 | Conference Room  | 30    | 48     | inches | 3        | Powder Coated | 5        |
 | AA-200 | Break Room       | 20    | 30     | inches | 1        | Anodized      | 0        |
 | BB-100 | Entry Vestibule  | 36    | 84     | inches | 2        | No Finish     | 10       |
-```
 
 ### With Titles and Sections
 
-```
 | Model          | Detail           | Width | Height | Unit   | Qty | Finish        | Disc |
 |----------------|------------------|-------|--------|--------|-----|---------------|------|
 | FIRST FLOOR    |                  |       |        |        |     |               |      |
@@ -246,7 +233,6 @@ Result: Items imported with default dimensions, quantities, and finishes.
 | Conference     |                  |       |        |        |     |               |      |
 | AA-200         | Main Conf Room   | 48    | 60     | inches | 3   | Anodized      | 0    |
 | BB-100         | Small Conf Room  | 30    | 48     | inches | 2   | No Finish     | 10   |
-```
 
 ## Import Process
 
