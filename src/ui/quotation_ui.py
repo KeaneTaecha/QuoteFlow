@@ -8,7 +8,7 @@ import os
 import re
 from datetime import datetime
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QLabel, QComboBox, QSpinBox, QPushButton,
+                             QHBoxLayout, QLabel, QComboBox, QSpinBox, QDoubleSpinBox, QPushButton,
                              QTableWidget, QTableWidgetItem, QGroupBox, QCheckBox,
                              QLineEdit, QMessageBox, QFileDialog, QHeaderView,
                              QGridLayout, QTextEdit, QDateEdit, QTabWidget, QListWidget, QSpacerItem, QSizePolicy,
@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QFont, QColor, QIcon
 
-from utils.price_calculator import PriceCalculator
+from utils.price_calculator import PriceCalculator, PriceNotFoundError, ModifierError, ProductNotFoundError, SizeNotFoundError
 from utils.excel_exporter import ExcelQuotationExporter
 from utils.excel_importer import ExcelItemImporter
 from utils.filter_utils import get_filter_price
@@ -577,10 +577,12 @@ class QuotationApp(QMainWindow):
         self.width_layout = QVBoxLayout()
         self.width_label = QLabel('Width (inches):')
         self.width_layout.addWidget(self.width_label)
-        self.width_spin = QSpinBox()
-        self.width_spin.setMinimum(1)
-        self.width_spin.setMaximum(9999)
-        self.width_spin.setValue(4)
+        self.width_spin = QDoubleSpinBox()
+        self.width_spin.setMinimum(0.1)
+        self.width_spin.setMaximum(9999.0)
+        self.width_spin.setValue(4.0)
+        self.width_spin.setSingleStep(0.1)
+        self.width_spin.setDecimals(2)
         self.width_spin.valueChanged.connect(self.update_price_display)
         self.width_layout.addWidget(self.width_spin)
         first_row.addLayout(self.width_layout)
@@ -589,10 +591,12 @@ class QuotationApp(QMainWindow):
         self.height_layout = QVBoxLayout()
         self.height_label = QLabel('Height (inches):')
         self.height_layout.addWidget(self.height_label)
-        self.height_spin = QSpinBox()
-        self.height_spin.setMinimum(1)
-        self.height_spin.setMaximum(9999)
-        self.height_spin.setValue(4)
+        self.height_spin = QDoubleSpinBox()
+        self.height_spin.setMinimum(0.1)
+        self.height_spin.setMaximum(9999.0)
+        self.height_spin.setValue(4.0)
+        self.height_spin.setSingleStep(0.1)
+        self.height_spin.setDecimals(2)
         self.height_spin.valueChanged.connect(self.update_price_display)
         self.height_layout.addWidget(self.height_spin)
         first_row.addLayout(self.height_layout)
@@ -601,10 +605,12 @@ class QuotationApp(QMainWindow):
         self.other_table_layout = QVBoxLayout()
         self.other_table_label = QLabel('Size (inches):')
         self.other_table_layout.addWidget(self.other_table_label)
-        self.other_table_spin = QSpinBox()
-        self.other_table_spin.setMinimum(1)
-        self.other_table_spin.setMaximum(9999)
-        self.other_table_spin.setValue(4)
+        self.other_table_spin = QDoubleSpinBox()
+        self.other_table_spin.setMinimum(0.1)
+        self.other_table_spin.setMaximum(9999.0)
+        self.other_table_spin.setValue(4.0)
+        self.other_table_spin.setSingleStep(0.1)
+        self.other_table_spin.setDecimals(2)
         self.other_table_spin.valueChanged.connect(self.update_price_display)
         self.other_table_layout.addWidget(self.other_table_spin)
         first_row.addLayout(self.other_table_layout)
@@ -1281,17 +1287,23 @@ class QuotationApp(QMainWindow):
             self.other_table_label.setText('Size (mm):')
             
             # Update spin box ranges for mm
-            self.width_spin.setMinimum(1)
-            self.width_spin.setMaximum(9999)
-            self.width_spin.setValue(100)  # 100mm ≈ 4 inches
+            self.width_spin.setMinimum(0.1)
+            self.width_spin.setMaximum(9999.0)
+            self.width_spin.setSingleStep(1.0)
+            self.width_spin.setDecimals(1)
+            self.width_spin.setValue(100.0)  # 100mm ≈ 4 inches
             
-            self.height_spin.setMinimum(1)
-            self.height_spin.setMaximum(9999)
-            self.height_spin.setValue(100)  # 100mm ≈ 4 inches
+            self.height_spin.setMinimum(0.1)
+            self.height_spin.setMaximum(9999.0)
+            self.height_spin.setSingleStep(1.0)
+            self.height_spin.setDecimals(1)
+            self.height_spin.setValue(100.0)  # 100mm ≈ 4 inches
             
-            self.other_table_spin.setMinimum(1)
-            self.other_table_spin.setMaximum(9999)
-            self.other_table_spin.setValue(100)  # 100mm ≈ 4 inches
+            self.other_table_spin.setMinimum(0.1)
+            self.other_table_spin.setMaximum(9999.0)
+            self.other_table_spin.setSingleStep(1.0)
+            self.other_table_spin.setDecimals(1)
+            self.other_table_spin.setValue(100.0)  # 100mm ≈ 4 inches
         elif unit == 'Centimeters':
             # Update labels
             self.width_label.setText('Width (cm):')
@@ -1299,17 +1311,23 @@ class QuotationApp(QMainWindow):
             self.other_table_label.setText('Size (cm):')
             
             # Update spin box ranges for cm
-            self.width_spin.setMinimum(1)
-            self.width_spin.setMaximum(9999)
-            self.width_spin.setValue(10)  # 10cm ≈ 4 inches
+            self.width_spin.setMinimum(0.1)
+            self.width_spin.setMaximum(9999.0)
+            self.width_spin.setSingleStep(0.1)
+            self.width_spin.setDecimals(1)
+            self.width_spin.setValue(10.0)  # 10cm ≈ 4 inches
             
-            self.height_spin.setMinimum(1)
-            self.height_spin.setMaximum(9999)
-            self.height_spin.setValue(10)  # 10cm ≈ 4 inches
+            self.height_spin.setMinimum(0.1)
+            self.height_spin.setMaximum(9999.0)
+            self.height_spin.setSingleStep(0.1)
+            self.height_spin.setDecimals(1)
+            self.height_spin.setValue(10.0)  # 10cm ≈ 4 inches
             
-            self.other_table_spin.setMinimum(1)
-            self.other_table_spin.setMaximum(9999)
-            self.other_table_spin.setValue(10)  # 10cm ≈ 4 inches
+            self.other_table_spin.setMinimum(0.1)
+            self.other_table_spin.setMaximum(9999.0)
+            self.other_table_spin.setSingleStep(0.1)
+            self.other_table_spin.setDecimals(1)
+            self.other_table_spin.setValue(10.0)  # 10cm ≈ 4 inches
         elif unit == 'Meters':
             # Update labels
             self.width_label.setText('Width (m):')
@@ -1317,17 +1335,23 @@ class QuotationApp(QMainWindow):
             self.other_table_label.setText('Size (m):')
             
             # Update spin box ranges for m (using decimals)
-            self.width_spin.setMinimum(1)
-            self.width_spin.setMaximum(9999)
-            self.width_spin.setValue(1)  # 0.1m ≈ 4 inches
+            self.width_spin.setMinimum(0.01)
+            self.width_spin.setMaximum(9999.0)
+            self.width_spin.setSingleStep(0.01)
+            self.width_spin.setDecimals(2)
+            self.width_spin.setValue(0.1)  # 0.1m ≈ 4 inches
             
-            self.height_spin.setMinimum(1)
-            self.height_spin.setMaximum(9999)
-            self.height_spin.setValue(1)  # 0.1m ≈ 4 inches
+            self.height_spin.setMinimum(0.01)
+            self.height_spin.setMaximum(9999.0)
+            self.height_spin.setSingleStep(0.01)
+            self.height_spin.setDecimals(2)
+            self.height_spin.setValue(0.1)  # 0.1m ≈ 4 inches
             
-            self.other_table_spin.setMinimum(1)
-            self.other_table_spin.setMaximum(9999)
-            self.other_table_spin.setValue(1)  # 0.1m ≈ 4 inches
+            self.other_table_spin.setMinimum(0.01)
+            self.other_table_spin.setMaximum(9999.0)
+            self.other_table_spin.setSingleStep(0.01)
+            self.other_table_spin.setDecimals(2)
+            self.other_table_spin.setValue(0.1)  # 0.1m ≈ 4 inches
         elif unit == 'Feet':
             # Update labels
             self.width_label.setText('Width (ft):')
@@ -1335,17 +1359,23 @@ class QuotationApp(QMainWindow):
             self.other_table_label.setText('Size (ft):')
             
             # Update spin box ranges for ft
-            self.width_spin.setMinimum(1)
-            self.width_spin.setMaximum(9999)
-            self.width_spin.setValue(1)  # 1ft = 12 inches
+            self.width_spin.setMinimum(0.1)
+            self.width_spin.setMaximum(9999.0)
+            self.width_spin.setSingleStep(0.1)
+            self.width_spin.setDecimals(2)
+            self.width_spin.setValue(0.33)  # 0.33ft ≈ 4 inches
             
-            self.height_spin.setMinimum(1)
-            self.height_spin.setMaximum(9999)
-            self.height_spin.setValue(1)  # 1ft = 12 inches
+            self.height_spin.setMinimum(0.1)
+            self.height_spin.setMaximum(9999.0)
+            self.height_spin.setSingleStep(0.1)
+            self.height_spin.setDecimals(2)
+            self.height_spin.setValue(0.33)  # 0.33ft ≈ 4 inches
             
-            self.other_table_spin.setMinimum(1)
-            self.other_table_spin.setMaximum(9999)
-            self.other_table_spin.setValue(1)  # 1ft = 12 inches
+            self.other_table_spin.setMinimum(0.1)
+            self.other_table_spin.setMaximum(9999.0)
+            self.other_table_spin.setSingleStep(0.1)
+            self.other_table_spin.setDecimals(2)
+            self.other_table_spin.setValue(0.33)  # 0.33ft ≈ 4 inches
         else:
             # Update labels for inches
             self.width_label.setText('Width (inches):')
@@ -1353,17 +1383,23 @@ class QuotationApp(QMainWindow):
             self.other_table_label.setText('Size (inches):')
             
             # Update spin box ranges for inches
-            self.width_spin.setMinimum(1)
-            self.width_spin.setMaximum(9999)
-            self.width_spin.setValue(4)
+            self.width_spin.setMinimum(0.1)
+            self.width_spin.setMaximum(9999.0)
+            self.width_spin.setSingleStep(0.1)
+            self.width_spin.setDecimals(2)
+            self.width_spin.setValue(4.0)
             
-            self.height_spin.setMinimum(1)
-            self.height_spin.setMaximum(9999)
-            self.height_spin.setValue(4)
+            self.height_spin.setMinimum(0.1)
+            self.height_spin.setMaximum(9999.0)
+            self.height_spin.setSingleStep(0.1)
+            self.height_spin.setDecimals(2)
+            self.height_spin.setValue(4.0)
             
-            self.other_table_spin.setMinimum(1)
-            self.other_table_spin.setMaximum(9999)
-            self.other_table_spin.setValue(4)
+            self.other_table_spin.setMinimum(0.1)
+            self.other_table_spin.setMaximum(9999.0)
+            self.other_table_spin.setSingleStep(0.1)
+            self.other_table_spin.setDecimals(2)
+            self.other_table_spin.setValue(4.0)
         
         self.update_price_display()
     
@@ -1430,34 +1466,45 @@ class QuotationApp(QMainWindow):
             if has_price_per_foot:
                 # For price_per_foot products with no dimensions, use get_price_for_price_per_foot with price_id
                 # Note: height is still required for price_per_foot calculation
-                height = self.height_spin.value()
-                unit = self.unit_combo.currentText()
-                height_inches = convert_dimension_to_inches(height, unit)
-                unit_price, _ = self.price_calculator.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id, height_unit=unit)
-                self.rounded_size_label.setText('N/A')
-            elif has_price_per_sq_in:
-                # For price_per_sq_in products with no dimensions, use get_price_for_price_per_sq_in with price_id
-                # Note: width and height are still required for price_per_sq_in calculation
-                width = self.width_spin.value()
-                height = self.height_spin.value()
-                unit = self.unit_combo.currentText()
-                width_inches = convert_dimension_to_inches(width, unit)
-                height_inches = convert_dimension_to_inches(height, unit)
-                unit_price, _ = self.price_calculator.get_price_for_price_per_sq_in(product, finish, 0, width_inches, height_inches, with_damper, special_color_multiplier, price_id=price_id, width_unit=unit, height_unit=unit)
-                self.rounded_size_label.setText('N/A')
-            elif is_other_table:
-                # For other table products with no dimensions, use find_rounded_other_table_size with price_id
                 try:
-                    rounded_size = self.price_calculator.find_rounded_other_table_size(product, 0, price_id=price_id)
-                except Exception:
+                    height = self.height_spin.value()
+                    unit = self.unit_combo.currentText()
+                    height_inches = convert_dimension_to_inches(height, unit)
+                    unit_price, _ = self.price_calculator.get_price_for_price_per_foot(product, finish, 0, height_inches, with_damper, special_color_multiplier, price_id=price_id, height_unit=unit)
+                    self.rounded_size_label.setText('N/A')
+                except (PriceNotFoundError, ModifierError, ProductNotFoundError, SizeNotFoundError, Exception) as e:
                     self.unit_price_label.setText('N/A')
                     self.total_price_label.setText('฿ 0.00')
                     self.rounded_size_label.setText('N/A')
                     return
-                
-                self.rounded_size_label.setText(rounded_size)
-                # Get price using the rounded size
-                unit_price, _ = self.price_calculator.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            elif has_price_per_sq_in:
+                # For price_per_sq_in products with no dimensions, use get_price_for_price_per_sq_in with price_id
+                # Note: width and height are still required for price_per_sq_in calculation
+                try:
+                    width = self.width_spin.value()
+                    height = self.height_spin.value()
+                    unit = self.unit_combo.currentText()
+                    width_inches = convert_dimension_to_inches(width, unit)
+                    height_inches = convert_dimension_to_inches(height, unit)
+                    unit_price, _ = self.price_calculator.get_price_for_price_per_sq_in(product, finish, 0, width_inches, height_inches, with_damper, special_color_multiplier, price_id=price_id, width_unit=unit, height_unit=unit)
+                    self.rounded_size_label.setText('N/A')
+                except (PriceNotFoundError, ModifierError, ProductNotFoundError, SizeNotFoundError, Exception) as e:
+                    self.unit_price_label.setText('N/A')
+                    self.total_price_label.setText('฿ 0.00')
+                    self.rounded_size_label.setText('N/A')
+                    return
+            elif is_other_table:
+                # For other table products with no dimensions, use find_rounded_other_table_size with price_id
+                try:
+                    rounded_size = self.price_calculator.find_rounded_other_table_size(product, 0, price_id=price_id)
+                    self.rounded_size_label.setText(rounded_size)
+                    # Get price using the rounded size
+                    unit_price, _ = self.price_calculator.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+                except (PriceNotFoundError, ModifierError, ProductNotFoundError, SizeNotFoundError, Exception) as e:
+                    self.unit_price_label.setText('N/A')
+                    self.total_price_label.setText('฿ 0.00')
+                    self.rounded_size_label.setText('N/A')
+                    return
 
         elif has_price_per_foot:
             # Handle price_per_foot products - require width and height
@@ -1483,7 +1530,13 @@ class QuotationApp(QMainWindow):
             # Get price using price_per_foot formula: (width / 12) × price_per_foot
             # Note: rounded_height is passed as 'width' parameter (to match database), width_inches is passed as 'height' (dimension to multiply)
             # height_unit should be the unit of the original height dimension (which is width_inches in this case, using 'unit')
-            unit_price, _ = self.price_calculator.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier, height_unit=unit)
+            try:
+                unit_price, _ = self.price_calculator.get_price_for_price_per_foot(product, finish, rounded_height, width_inches, with_damper, special_color_multiplier, height_unit=unit)
+            except (PriceNotFoundError, ModifierError, ProductNotFoundError, SizeNotFoundError, Exception) as e:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
         elif has_price_per_sq_in:
             # Handle price_per_sq_in products - require width and height
             width = self.width_spin.value()
@@ -1508,7 +1561,13 @@ class QuotationApp(QMainWindow):
             # Get price using price_per_sq_in formula: (width * height) × price_per_sq_in
             # Note: rounded_height is used to look up price_per_sq_in from database
             # width_inches and height_inches are used to calculate area
-            unit_price, _ = self.price_calculator.get_price_for_price_per_sq_in(product, finish, rounded_height, width_inches, height_inches, with_damper, special_color_multiplier, width_unit=unit, height_unit=unit)
+            try:
+                unit_price, _ = self.price_calculator.get_price_for_price_per_sq_in(product, finish, rounded_height, width_inches, height_inches, with_damper, special_color_multiplier, width_unit=unit, height_unit=unit)
+            except (PriceNotFoundError, ModifierError, ProductNotFoundError, SizeNotFoundError, Exception) as e:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
         elif is_other_table:
             # Handle other table products
             height = self.other_table_spin.value()
@@ -1529,7 +1588,13 @@ class QuotationApp(QMainWindow):
             self.rounded_size_label.setText(rounded_size)
             
             # Get price using the rounded size
-            unit_price, _ = self.price_calculator.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            try:
+                unit_price, _ = self.price_calculator.get_price_for_other_table(product, finish, rounded_size, with_damper, special_color_multiplier)
+            except (PriceNotFoundError, ModifierError, ProductNotFoundError, SizeNotFoundError, Exception) as e:
+                self.unit_price_label.setText('N/A')
+                self.total_price_label.setText('฿ 0.00')
+                self.rounded_size_label.setText('N/A')
+                return
         else:
             # Handle width/height-based products
             width = self.width_spin.value()
@@ -1567,7 +1632,7 @@ class QuotationApp(QMainWindow):
             # Get price using the rounded size (handles exceeded dimensions internally)
             try:
                 unit_price, _ = self.price_calculator.get_price_for_default_table(product, finish, rounded_size, with_damper, special_color_multiplier)
-            except Exception:
+            except (PriceNotFoundError, ModifierError, ProductNotFoundError, SizeNotFoundError, Exception) as e:
                 self.unit_price_label.setText('N/A')
                 self.total_price_label.setText('฿ 0.00')
                 self.rounded_size_label.setText('N/A')

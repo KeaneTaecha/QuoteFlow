@@ -419,7 +419,7 @@ class ExcelQuotationExporter:
                 cell_m.value = f'=ROUND(AE{current_row},0)'
                 cell_m.font = normal_font
                 cell_m.alignment = right_alignment
-                cell_m.number_format = '0'  # Whole numbers only
+                cell_m.number_format = '0.00'  # Display with .00 format
                 
                 # AMOUNT in column Q - ราคาต่อหน่วย x จำนวน (M * K)
                 cell_q = self.ws[f'Q{current_row}']
@@ -427,7 +427,7 @@ class ExcelQuotationExporter:
                 cell_q.value = f'=ROUND(M{current_row}*K{current_row},0)'
                 cell_q.font = normal_font
                 cell_q.alignment = right_alignment
-                cell_q.number_format = '0'  # Whole numbers only
+                cell_q.number_format = '0.00'  # Display with .00 format
                 
                 # Calculate item_total for footer (using AE value, but we'll calculate it after AE is set)
                 # We'll need to recalculate this after AE column is populated

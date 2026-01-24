@@ -5,6 +5,7 @@ Handles price calculations using data from the SQLite price database for HRG and
 
 import re
 import math
+from typing import Optional
 from utils.equation_parser import EquationParser
 from utils.sql_loader import PriceDatabase
 
@@ -85,13 +86,104 @@ class PriceCalculator:
         
         try:
             if self.equation_parser.is_equation(modifier):
-                return self.equation_parser.parse_equation(str(modifier), variables)
+                # Pass self (PriceCalculator) to handle [MODEL] tokens in equations
+                return self.equation_parser.parse_equation(
+                    str(modifier), 
+                    variables,
+                    price_calculator=self
+                )
             elif self.equation_parser.is_number(modifier):
                 return base_value * float(modifier)
             else:
                 return base_value
         except Exception as e:
             raise ModifierError(f"Error applying modifier '{modifier}': {e}") from e
+
+    def _resolve_model_tb_price(self, model: str, width: Optional[float], height: Optional[float], diameter: Optional[float]) -> float:
+        """
+        Resolve a referenced model's TB (normal) base price for the provided dimension context.
+        This is used as a callback by EquationParser to resolve [MODEL] tokens.
+        
+        Args:
+            model: Model name to look up
+            width: Optional width dimension
+            height: Optional height dimension
+            diameter: Optional diameter dimension
+            
+        Returns:
+            TB price for the model at the specified dimensions
+        """
+        # Default table context
+        if width is not None and height is not None:
+            tb, _wd = self._get_raw_prices_for_dimension(model, float(width), float(height))
+            return float(tb)
+
+        # Other table (diameter) context
+        if diameter is not None:
+            tb, _wd = self._get_raw_prices_for_diameter(model, float(diameter))
+            return float(tb)
+
+        raise ModifierError(
+            f"Cannot resolve model token [{model}] because current dimensions are unknown "
+            f"(expected variables WIDTH/HEIGHT or DIAMETER)."
+        )
+
+    def _get_raw_prices_for_diameter(self, product: str, diameter: float):
+        """Get raw (tb_price, wd_price) for an other-table (diameter-based) model."""
+        if not self.is_other_table(product):
+            raise ModifierError(f"Model [{product}] is not an other-table product; cannot use DIAMETER context for it.")
+
+        table_id = self.db.get_table_id(product)
+        if table_id is None:
+            raise ProductNotFoundError(f'Product data not found for {product}')
+
+        price_result = self.db.get_price_for_diameter(table_id, diameter)
+        if not price_result:
+            raise PriceNotFoundError(f'Price not found for {product} with diameter {diameter}"')
+        return price_result
+
+    def _get_raw_prices_for_dimension(self, product: str, width: float, height: float):
+        """Get raw (tb_price, wd_price) for a default-table (width/height) model."""
+        if self.is_other_table(product):
+            raise ModifierError(f"Model [{product}] is an other-table product; cannot use WIDTH/HEIGHT context for it.")
+        if self.has_price_per_foot(product) or self.has_price_per_sq_in(product) or self.has_no_dimensions(product):
+            raise ModifierError(
+                f"Model [{product}] uses non-default sizing (price_per_foot/price_per_sq_in/no_dimensions) "
+                f"and is not supported inside [MODEL] tokens."
+            )
+
+        table_id = self.db.get_table_id(product)
+        if table_id is None:
+            raise ProductNotFoundError(f'Product data not found for {product}')
+
+        # Match the same base-price logic as get_price_for_default_table (including VD oversized
+        # and exceeded-dimension multipliers), but return raw tb/wd.
+        if product in ['VD', 'VD-G', 'VD-M', 'GVD', 'RVD', 'RVD-G', 'RVD-M', 'VD-M on/off 24V']:
+            vd_result = self._calculate_vd_oversized_price(table_id, width, height, with_damper=False, product=product)
+            if vd_result is not None:
+                return vd_result
+
+        exceeded_tb_multiplier = self._get_exceeded_dimension_multiplier(table_id, width, height, with_damper=False)
+        exceeded_wd_multiplier = self._get_exceeded_dimension_multiplier(table_id, width, height, with_damper=True)
+
+        if exceeded_tb_multiplier is not None:
+            tb_price = height * width * exceeded_tb_multiplier
+            wd_price = height * width * exceeded_wd_multiplier if exceeded_wd_multiplier is not None else tb_price
+            return tb_price, wd_price
+
+        # Most models store (height, width) in the DB in the natural orientation where size is "width x height"
+        # and we query with (height, width).
+        price_result = self.db.get_price_for_dimensions(table_id, height, width)
+        if price_result:
+            return price_result
+
+        # Some tables are stored transposed (e.g. WD in current DB stores width values in the height column).
+        # For bracket model lookups, prefer returning the exact match in the transposed orientation rather than failing.
+        swapped_result = self.db.get_price_for_dimensions(table_id, width, height)
+        if swapped_result:
+            return swapped_result
+
+        raise PriceNotFoundError(f'Price not found for {product} with size {width}" x {height}"')
     
     def _apply_base_modifier(self, base_modifier, variables):
         """Apply Base modifier to calculate base price (BP)"""
@@ -140,7 +232,7 @@ class PriceCalculator:
     
     def _calculate_final_price_from_base_prices(self, tb_price, wd_price, base_modifier, anodized_multiplier, 
                                                  powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper=False, 
-                                                 special_color_multiplier=None):
+                                                 special_color_multiplier=None, *, width=None, height=None, diameter=None):
         """
         Calculate final price from base TB and WD prices using modifiers and finish multipliers.
         This is a shared helper function used by get_price_for_other_table, get_price_for_default_table,
@@ -164,7 +256,10 @@ class PriceCalculator:
         # Create variables for Base modifier calculation
         tb_variables = {
             'TB': tb_price,
-            'WD': wd_price
+            'WD': wd_price,
+            'WIDTH': width,
+            'HEIGHT': height,
+            'DIAMETER': diameter,
         }
         
         # Apply Base modifier to calculate base price (BP)
@@ -174,7 +269,10 @@ class PriceCalculator:
         wd_variables = {
             'TB': tb_price,
             'WD': wd_price,
-            'BP': bp_price
+            'BP': bp_price,
+            'WIDTH': width,
+            'HEIGHT': height,
+            'DIAMETER': diameter,
         }
         
         # Apply WD modifier to calculate modified WD price (MWD) only when with_damper is True
@@ -212,6 +310,9 @@ class PriceCalculator:
             'WD': wd_price,           # WD remains the original with-damper price
             'BP': bp_price,           # BP (Base Price) is the calculated value from TB modifier
             'MWD': modified_wd_price, # MWD (Modified WD) is the calculated value from WD multiplier
+            'WIDTH': width,
+            'HEIGHT': height,
+            'DIAMETER': diameter,
         }
         
         # Apply finish pricing - MWD already has the WD modifier applied
@@ -338,7 +439,7 @@ class PriceCalculator:
         final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
             tb_price, wd_price, base_modifier, anodized_multiplier,
             powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
-            special_color_multiplier
+            special_color_multiplier, width=width, height=height
         )
         return final_price, finish_multiplier
     
@@ -393,7 +494,7 @@ class PriceCalculator:
         final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
             tb_price, wd_price, base_modifier, anodized_multiplier,
             powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
-            special_color_multiplier
+            special_color_multiplier, width=actual_width, height=actual_height
         )
         return final_price, finish_multiplier
     
@@ -462,7 +563,7 @@ class PriceCalculator:
                 final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
                     tb_price, wd_price, base_modifier, anodized_multiplier,
                     powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
-                    special_color_multiplier
+                    special_color_multiplier, width=width, height=height
                 )
                 return final_price, finish_multiplier
         
@@ -488,7 +589,7 @@ class PriceCalculator:
         final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
             tb_price, wd_price, base_modifier, anodized_multiplier,
             powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
-            special_color_multiplier
+            special_color_multiplier, width=width, height=height
         )
         
         return final_price, finish_multiplier
@@ -534,7 +635,7 @@ class PriceCalculator:
         final_price, finish_multiplier = self._calculate_final_price_from_base_prices(
             tb_price, wd_price, base_modifier, anodized_multiplier,
             powder_coated_multiplier, no_finish_multiplier, wd_modifier, finish, with_damper,
-            special_color_multiplier
+            special_color_multiplier, diameter=diameter
         )
         return final_price, finish_multiplier
     

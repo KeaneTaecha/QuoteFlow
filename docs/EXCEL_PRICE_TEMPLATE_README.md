@@ -41,8 +41,8 @@ The converter uses keyword recognition to identify columns. Column names are cas
 | Sheet Name | Model    | TB Modifier | Anodized | Powder Coated | No Finish | WD      |
 |-----------|---------|-------------|----------|---------------|-----------|---------|
 | Sheet1    | AA-100  | 1.0         | 1.0      | 1.15          | 0.85      | 1.2     |
-| Sheet1    | AA-200  | w*h/144     | 1.0      | 1.20          | 0.80      |         |
-| Sheet2    | BB-100  | (w+h)/2     | 1.05     | 1.15          | 0.85      | 1.25    |
+| Sheet1    | AA-200  | WIDTH*HEIGHT/144     | 1.0      | 1.20          | 0.80      |         |
+| Sheet2    | BB-100  | (WIDTH+HEIGHT)/2     | 1.05     | 1.15          | 0.85      | 1.25    |
 
 #### Column Details
 
@@ -59,12 +59,14 @@ The converter uses keyword recognition to identify columns. Column names are cas
 **TB Modifier (Base Modifier)**:
 - Mathematical equation or numeric value
 - Applied before finish multipliers
-- Supports: `w` (width), `h` (height), `+`, `-`, `*`, `/`, `(`, `)`
+- Supports: `WIDTH` (width in inches), `HEIGHT` (height in inches), `DIAMETER` (diameter in inches for other tables), `TB` (current table base price), `WD` (with damper price), `[MODEL]` (reference other model's TB price), `+`, `-`, `*`, `/`, `(`, `)`
 - Examples:
   - `1.0` - Fixed multiplier
-  - `w*h/144` - Area in square feet
-  - `(w+h)/2` - Average dimension
-  - `w*1.5` - 50% width premium
+  - `WIDTH*HEIGHT/144` - Area in square feet
+  - `(WIDTH+HEIGHT)/2` - Average dimension
+  - `WIDTH*1.5` - 50% width premium
+  - `TB + [WSD]` - Current TB price plus WSD model's TB price at same dimensions
+  - `[AA-100] * 1.2` - Reference another model's TB price with multiplier
 
 **Finish Multipliers**:
 - **Anodized**: Typically 1.0 (standard finish)
@@ -326,7 +328,7 @@ Here's a minimal complete example:
 | Sheet Name | Model   | TB Modifier | Anodized | Powder Coated | No Finish |
 |-----------|---------|-------------|----------|---------------|-----------|
 | Products  | AA-100  | 1.0         | 1.0      | 1.15          | 0.85      |
-| Products  | AA-200  | w*h/144     | 1.0      | 1.20          | 0.80      |
+| Products  | AA-200  | WIDTH*HEIGHT/144     | 1.0      | 1.20          | 0.80      |
 
 **Sheet: "Products"**
 ```
@@ -389,8 +391,19 @@ AA-200
 Supported operators and variables:
 
 **Variables**:
-- `w` - Width in inches
-- `h` - Height in inches
+- `WIDTH` - Width in inches (available in TB Modifier and WD Modifier equations)
+- `HEIGHT` - Height in inches (available in TB Modifier and WD Modifier equations)
+- `DIAMETER` - Diameter in inches for other-table products (available in TB Modifier and WD Modifier equations)
+- `TB` - Current table base price (available in TB Modifier equations)
+- `WD` - Current with damper price (available in TB Modifier and WD Modifier equations)
+
+**Model References**:
+- `[MODEL]` - References another model's TB (table base) price at the same dimensions
+  - Replace `MODEL` with an actual model name (e.g., `[WSD]`, `[AA-100]`)
+  - Resolves to the referenced model's TB price at the current product's dimensions
+  - Dimension context is automatically read from WIDTH/HEIGHT (default table) or DIAMETER (other table)
+  - Model name must match exactly (case-sensitive) with a model in the database
+  - Multiple model references can be used in a single equation
 
 **Operators**:
 - `+` - Addition
@@ -401,10 +414,13 @@ Supported operators and variables:
 
 **Examples**:
 ```
-w*h/144          # Square feet (144 sq in = 1 sq ft)
-(w+h)/2          # Average dimension
-w*1.5+h*2        # Weighted dimensions
-(w*h/100)+5      # Area with base fee
+WIDTH*HEIGHT/144          # Square feet (144 sq in = 1 sq ft)
+(WIDTH+HEIGHT)/2          # Average dimension
+WIDTH*1.5+HEIGHT*2        # Weighted dimensions
+(WIDTH*HEIGHT/100)+5      # Area with base fee
+TB + [WSD]                # Current TB price plus WSD model's TB price
+[AA-100] * 1.2            # AA-100 model's TB price multiplied by 1.2
+TB - [WSD] + 50           # Current TB minus WSD TB plus fixed amount
 ```
 
 ### Vertically Merged Cells
