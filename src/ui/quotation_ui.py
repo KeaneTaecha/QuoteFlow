@@ -1179,6 +1179,21 @@ class QuotationApp(QMainWindow):
         matching_models = [model for model in self.available_models 
                           if search_text in model.lower()]
         
+        # Sort matching models to prioritize exact matches and matches that start with search text
+        def sort_key(model):
+            model_lower = model.lower()
+            # Exact match gets highest priority (0)
+            if model_lower == search_text:
+                return (0, model)
+            # Starts with search text gets second priority (1)
+            elif model_lower.startswith(search_text):
+                return (1, model)
+            # Other matches get lowest priority (2)
+            else:
+                return (2, model)
+        
+        matching_models.sort(key=sort_key)
+        
         # Update dropdown with matching models
         self.product_dropdown.clear()
         if matching_models:
