@@ -683,6 +683,13 @@ class QuotationApp(QMainWindow):
         # Add first row to main layout
         main_layout.addLayout(first_row)
         
+        # Warning label for height > width (initially hidden)
+        self.height_width_warning_label = QLabel('')
+        self.height_width_warning_label.setStyleSheet('color: #FF9800; font-weight: bold; padding: 5px; background-color: #FFF3E0; border: 1px solid #FFB74D; border-radius: 3px;')
+        self.height_width_warning_label.setWordWrap(True)
+        self.height_width_warning_label.setVisible(False)
+        main_layout.addWidget(self.height_width_warning_label)
+        
         # Second row: Detail (on its own row)
         second_row = QHBoxLayout()
         detail_layout = QVBoxLayout()
@@ -1416,6 +1423,7 @@ class QuotationApp(QMainWindow):
             self.unit_price_label.setText('฿ 0.00')
             self.total_price_label.setText('฿ 0.00')
             self.rounded_size_label.setText('')
+            self.height_width_warning_label.setVisible(False)
             return
         
         finish = self.finish_combo.currentText()
@@ -1452,6 +1460,10 @@ class QuotationApp(QMainWindow):
             has_no_dimensions, has_price_per_foot, has_price_per_sq_in, is_other_table = get_product_type_flags(self.price_calculator, product)
         else:
             has_no_dimensions = has_price_per_foot = has_price_per_sq_in = is_other_table = False
+        
+        # Hide warning label for non-default table products (will be shown for default table if needed)
+        if has_no_dimensions or has_price_per_foot or has_price_per_sq_in or is_other_table:
+            self.height_width_warning_label.setVisible(False)
         
         if has_no_dimensions:
             # Handle products with no height/width - extract price_id first
@@ -1600,16 +1612,21 @@ class QuotationApp(QMainWindow):
             width = self.width_spin.value()
             height = self.height_spin.value()
             
-            # Validate dimensions: width should be greater than height
-            if height > width:
-                self.unit_price_label.setText('N/A')
-                self.total_price_label.setText('฿ 0.00')
-                self.rounded_size_label.setText('N/A')
-                return
-            
             # Convert to inches if needed
             width_inches = convert_dimension_to_inches(width, unit)
             height_inches = convert_dimension_to_inches(height, unit)
+            
+            # Show warning if height > width (before swapping for calculation)
+            if height_inches > width_inches:
+                self.height_width_warning_label.setText('⚠ Warning: Height is greater than width. The calculation will proceed using the same method.')
+                self.height_width_warning_label.setVisible(True)
+            else:
+                self.height_width_warning_label.setVisible(False)
+            
+            # Swap dimensions if height > width (same as quote_utils.py does)
+            # This ensures correct database lookup since the database expects width >= height
+            if height_inches > width_inches:
+                width_inches, height_inches = height_inches, width_inches
             
             # Find the rounded up size for pricing
             try:
@@ -1743,11 +1760,10 @@ class QuotationApp(QMainWindow):
                 width = self.width_spin.value()
                 height = self.height_spin.value()
                 
-                # Validate dimensions: width should be greater than height (for default products)
+                # Warn if height is greater than width (for default products), but allow to proceed
                 if not (has_price_per_foot or has_price_per_sq_in) and height > width:
-                    QMessageBox.warning(self, 'Invalid Dimensions', 
-                                      'Width must be greater than height. Please adjust the dimensions.')
-                    return
+                    QMessageBox.warning(self, 'Warning: Height Greater Than Width', 
+                                      'Height is greater than width. The calculation will proceed using the same method.')
             elif is_other_table:
                 # For other_table products, use the other_table_spin value as height (diameter)
                 height = self.other_table_spin.value()

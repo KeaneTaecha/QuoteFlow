@@ -675,7 +675,7 @@ class PriceCalculator:
         Calculate base TB and WD prices for VD, VD-G and VD-M products when dimensions exceed limits:
         - Height > 40 inch or Width > 80 inch
         - Use maximum dimensions (40 inch height, 80 inch width) to calculate round-up multipliers
-        - Find price for the divided dimensions and multiply by round-up numbers
+        - Find price for the divided dimensions (rounded up to next available dimensions) and multiply by round-up numbers
         - Returns base prices (TB and WD) after dimension multipliers, ready for finish multiplier application
         
         Args:
@@ -683,7 +683,7 @@ class PriceCalculator:
             width: Width in inches
             height: Height in inches
             with_damper: Whether product has damper option
-            product: Product model name (VD, VD-G or VD-M) - kept for compatibility but not used
+            product: Product model name (VD, VD-G or VD-M) - required for dimension lookup
             
         Returns:
             Tuple of (tb_price, wd_price) after dimension multipliers, or None if not oversized
@@ -715,30 +715,30 @@ class PriceCalculator:
         adjusted_height_inches = adjusted_height
         adjusted_width_inches = adjusted_width
         
-        # Get maximum available dimensions
-        max_dims = self.db.get_max_dimensions(table_id)
-        if not max_dims:
+        # Round up to the next available dimensions in the database using find_rounded_default_table_size
+        # This ensures we use a price that's >= the adjusted dimensions
+        if not product:
             return None
         
-        max_height, max_width = max_dims
+        rounded_size = self.db.find_rounded_default_table_size(product, adjusted_width_inches, adjusted_height_inches)
+        if not rounded_size:
+            return None
         
-        # Use the maximum available dimensions if adjusted dimensions exceed them
-        lookup_width = min(adjusted_width_inches, max_width)
-        lookup_height = min(adjusted_height_inches, max_height)
+        # Parse the rounded size string (format: "35" x 45" or "35.5" x 45.2")
+        # Extract dimensions from format like "35" x 45""
+        size_match = re.match(r'(\d+(?:\.\d+)?)"\s+x\s+(\d+(?:\.\d+)?)"', rounded_size)
+        if not size_match:
+            return None
         
-        # Find the price for the lookup dimensions
+        lookup_width = float(size_match.group(1))
+        lookup_height = float(size_match.group(2))
+        
+        # Get prices for the rounded dimensions
         price_result = self.db.get_price_for_dimensions(table_id, lookup_height, lookup_width)
-        
-        # If no exact match found, try to find the closest available dimensions
         if not price_result:
-            closest = self.db.find_closest_price_for_dimensions(table_id, lookup_height, lookup_width)
-            if closest:
-                lookup_height, lookup_width, tb_price, wd_price = closest
-            else:
-                return None
-        else:
-            # Get both TB and WD prices from exact match
-            tb_price, wd_price = price_result
+            return None
+        
+        tb_price, wd_price = price_result
         
         # Calculate total multiplier
         total_multiplier = height_multiplier * width_multiplier

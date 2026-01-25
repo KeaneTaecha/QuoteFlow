@@ -181,7 +181,6 @@ def build_quote_item(
             # INS and filter calculations only apply to default table products
             # Skip for has_no_dimensions products
             filter_price, ins_price = 0.0, 0.0
-            
         
     # Handle price_per_foot products
     elif has_price_per_foot:
@@ -315,8 +314,6 @@ def build_quote_item(
         
         if height_inches > width_inches:
             width_inches, height_inches = height_inches, width_inches
-            width, height = height, width
-            width_unit, height_unit = height_unit, width_unit
             warning_message = f'Width and height appear to be swapped. Using {width_inches}" x {height_inches}" instead.'
         
         rounded_size = price_calculator.find_rounded_default_table_size(product, finish, width_inches, height_inches) or f'{width_inches}" x {height_inches}"'
