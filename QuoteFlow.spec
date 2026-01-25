@@ -28,7 +28,9 @@ a = Analysis(
         'excel_to_sql.handlers.header_handler', 
         'excel_to_sql.handlers.other_handler',
         'sqlite3',
-        'openpyxl'
+        'openpyxl',
+        'Pillow',
+        'PIL'
     ],
     hookspath=[],
     hooksconfig={},
@@ -39,7 +41,6 @@ a = Analysis(
         'scipy',
         'pandas',
         'tkinter',
-        'PIL',
         'cv2',
         'torch',
         'torchvision',
